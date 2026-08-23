@@ -158,6 +158,10 @@ final class TrackerTests: XCTestCase {
         defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
         let window = FakeWindow()
         let tracker = try makeTracker(window: window)
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1),
+            type: .leftMouseDown
+        ))
         XCTAssertTrue(tracker.handleEvent(
             event(flags: .maskControl, button: 1),
             type: .leftMouseDragged
@@ -171,6 +175,10 @@ final class TrackerTests: XCTestCase {
             type: .leftMouseUp
         ))
         XCTAssertEqual(window.origin, CGPoint(x: 10, y: 0))
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1, location: CGPoint(x: 10, y: 0)),
+            type: .leftMouseDown
+        ))
         XCTAssertTrue(tracker.handleEvent(
             event(flags: .maskControl, button: 1, location: CGPoint(x: 10, y: 0)),
             type: .leftMouseDragged
@@ -181,7 +189,7 @@ final class TrackerTests: XCTestCase {
         var postedEvents: [CGEvent] = []
         let tracker = try makeTracker(
             window: FakeWindow(),
-            postMouseMoved: { postedEvents.append($0) }
+            postMouseMoved: { event, _ in postedEvents.append(event) }
         )
 
         XCTAssertFalse(tracker.handleEvent(
@@ -214,6 +222,10 @@ final class TrackerTests: XCTestCase {
         defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
         tracker.readModifiers()
 
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskAlternate, location: CGPoint(x: 30, y: 35)),
+            type: .leftMouseDown
+        ))
         XCTAssertTrue(tracker.handleEvent(
             event(flags: .maskAlternate, location: CGPoint(x: 30, y: 35)),
             type: .leftMouseDragged
@@ -374,46 +386,105 @@ final class TrackerTests: XCTestCase {
         XCTAssertEqual(window.sizeWriteCount, 1)
     }
 
-    func testMoveCursorIsRestoredWhenModifiersAreReleased() throws {
+    func testActivationLookupCompletesOutsideEventCallback() throws {
         let window = FakeWindow()
-        var selected: [Tracker.CursorKind] = []
-        var cursorSets = 0
+        var activationWork: (() -> Void)?
+        var lookups = 0
         let tracker = try makeTracker(
             window: window,
-            cursorSet: { _ in cursorSets += 1 },
-            cursorFor: { selected.append($0); return NSCursor.arrow }
+            windowAt: { _ in
+                lookups += 1
+                return window.trackingWindow
+            },
+            enqueueActivation: { activationWork = $0 }
         )
 
-        XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
-        XCTAssertTrue(tracker.handleEvent(event(flags: []), type: .mouseMoved))
-        XCTAssertEqual(selected, [.move])
-        XCTAssertEqual(cursorSets, 2)
+        XCTAssertFalse(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
+        XCTAssertEqual(lookups, 0)
+
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, location: CGPoint(x: 12, y: 4)),
+            type: .mouseMoved
+        ))
+        activationWork?()
+        XCTAssertEqual(lookups, 1)
+        fireTimer()
+        XCTAssertEqual(window.origin, CGPoint(x: 12, y: 4))
     }
 
-    func testPermissionLossRestoresCursorAndRejectsEvent() throws {
-        let window = FakeWindow()
-        var trusted = true
-        var cursorSets = 0
+    func testModifierReleaseCancelsPendingActivation() throws {
+        var activationWork: (() -> Void)?
+        var timersCreated = 0
         let tracker = try makeTracker(
-            window: window,
-            trusted: { trusted },
-            cursorSet: { _ in cursorSets += 1 }
+            window: FakeWindow(),
+            makeTimer: { _ in
+                timersCreated += 1
+                return nil
+            },
+            enqueueActivation: { activationWork = $0 }
         )
 
+        XCTAssertFalse(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
+        XCTAssertFalse(tracker.handleEvent(event(flags: []), type: .flagsChanged))
+        activationWork?()
+        XCTAssertEqual(timersCreated, 0)
+    }
+
+    func testDragOnlyPreflightActivatesWhenReadyBeforeFirstDrag() throws {
+        defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
+        var activationWork: (() -> Void)?
+        let tracker = try makeTracker(
+            window: FakeWindow(),
+            enqueueActivation: { activationWork = $0 }
+        )
+
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1),
+            type: .leftMouseDown
+        ))
+        activationWork?()
+        XCTAssertTrue(tracker.handleEvent(
+            event(flags: .maskControl, button: 1, location: CGPoint(x: 5, y: 0)),
+            type: .leftMouseDragged
+        ))
+    }
+
+    func testDragOnlyPassesWholeGestureWhenPreflightIsLate() throws {
+        defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
+        var activationWork: (() -> Void)?
+        let tracker = try makeTracker(
+            window: FakeWindow(),
+            enqueueActivation: { activationWork = $0 }
+        )
+
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1),
+            type: .leftMouseDown
+        ))
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1, location: CGPoint(x: 5, y: 0)),
+            type: .leftMouseDragged
+        ))
+        activationWork?()
+        XCTAssertFalse(tracker.handleEvent(
+            event(flags: .maskControl, button: 1, location: CGPoint(x: 10, y: 0)),
+            type: .leftMouseDragged
+        ))
+    }
+
+
+    func testTapDisablePassesEventThroughAndResetsTracking() throws {
+        let tracker = try makeTracker(window: FakeWindow())
+
         XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
-        trusted = false
-        XCTAssertFalse(tracker.handleEvent(event(flags: .maskControl, dx: 1), type: .mouseMoved))
-        XCTAssertEqual(cursorSets, 2)
+        XCTAssertFalse(tracker.handleEvent(event(flags: []), type: .tapDisabledByTimeout))
+        XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
     }
 
     func testResizeOvershootRemainsAtNativeMinimumUntilRequestedSizeRecovers() throws {
         let window = FakeWindow()
         window.minimumWidth = 50
-        var cursorSets = 0
-        let tracker = try makeTracker(
-            window: window,
-            cursorSet: { _ in cursorSets += 1 }
-        )
+        let tracker = try makeTracker(window: window)
 
         XCTAssertTrue(tracker.handleEvent(event(flags: .maskAlternate), type: .mouseMoved))
         now = 1
@@ -436,7 +507,6 @@ final class TrackerTests: XCTestCase {
         XCTAssertTrue(tracker.handleEvent(event(flags: .maskAlternate, dx: 39, location: CGPoint(x: -101, y: 0)), type: .mouseMoved))
         fireTimer()
         XCTAssertEqual(window.size.width, 60)
-        XCTAssertEqual(cursorSets, 1)
     }
 
     func testMoveKeepsTitleBarVisibleAcrossDisplays() throws {
@@ -779,30 +849,29 @@ final class TrackerTests: XCTestCase {
         )
     }
 
-    func testIdleMouseEventsDoNotQueryAccessibilityTrust() throws {
-        var trustChecks = 0
-        let tracker = try makeTracker(window: FakeWindow(), trusted: {
-            trustChecks += 1
-            return true
-        })
+    func testIdleMouseEventsPassThrough() throws {
+        let tracker = try makeTracker(window: FakeWindow())
 
         XCTAssertFalse(tracker.handleEvent(event(flags: []), type: .mouseMoved))
         XCTAssertFalse(tracker.handleEvent(event(flags: .maskShift), type: .mouseMoved))
-        XCTAssertEqual(trustChecks, 0)
     }
 
-    func testTapDisabledEventChecksPermissionAndPassesThrough() throws {
-        var trusted = true
-        var trustChecks = 0
-        let tracker = try makeTracker(window: FakeWindow(), trusted: {
-            trustChecks += 1
-            return trusted
-        })
+    func testTapDisabledEventCancelsPendingActivation() throws {
+        var activationWork: (() -> Void)?
+        var timersCreated = 0
+        let tracker = try makeTracker(
+            window: FakeWindow(),
+            makeTimer: { _ in
+                timersCreated += 1
+                return nil
+            },
+            enqueueActivation: { activationWork = $0 }
+        )
 
+        XCTAssertFalse(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
         XCTAssertFalse(tracker.handleEvent(event(flags: []), type: .tapDisabledByTimeout))
-        trusted = false
-        XCTAssertFalse(tracker.handleEvent(event(flags: []), type: .tapDisabledByTimeout))
-        XCTAssertEqual(trustChecks, 2)
+        activationWork?()
+        XCTAssertEqual(timersCreated, 0)
     }
 
     func testTimerCreationFailureResetsTracking() throws {
@@ -1006,26 +1075,22 @@ final class TrackerTests: XCTestCase {
 
     private func makeTracker(
         window: FakeWindow,
-        trusted: @escaping () -> Bool = { true },
+        windowAt: ((CGPoint) -> TrackingWindow?)? = nil,
         displays: @escaping () -> [DisplayFrame] = { [] },
-        cursorSet: @escaping (NSCursor) -> Void = { _ in },
-        cursorFor: @escaping (Tracker.CursorKind) -> NSCursor = { _ in NSCursor.arrow },
         makeTimer: ((@escaping () -> Void) -> TrackingTimer?)? = nil,
+        enqueueActivation: @escaping (@escaping () -> Void) -> Void = { work in work() },
         enqueueCommit: @escaping (@escaping () -> Void) -> Void = { work in work() },
         commitGate: @escaping () -> Void = {},
         commitApplyGate: @escaping () -> Void = {},
-        postMouseMoved: @escaping (CGEvent) -> Void = { _ in }
+        postMouseMoved: @escaping (CGEvent, CGEventTapProxy?) -> Void = { _, _ in }
     ) throws -> Tracker {
         try Tracker(dependencies: .init(
-            trusted: trusted,
-            windowAt: { _ in window.trackingWindow },
+            windowAt: windowAt ?? { _ in window.trackingWindow },
             now: { self.now },
             displays: displays,
-            cursorCurrent: { NSCursor.arrow },
-            cursorSet: cursorSet,
-            cursorFor: cursorFor,
             makeTimer: makeTimer ?? { self.timers.makeTimer(handler: $0) },
             enqueueCommit: enqueueCommit,
+            enqueueActivation: enqueueActivation,
             commitGate: commitGate,
             commitApplyGate: commitApplyGate,
             postMouseMoved: postMouseMoved,

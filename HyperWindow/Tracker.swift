@@ -122,19 +122,11 @@ private final class EventTapThread {
 
 class Tracker {
 
-    enum CursorKind: Equatable {
-        case move
-        case resize(Corner)
-    }
 
     struct Dependencies {
-        var trusted: () -> Bool
         var windowAt: (CGPoint) -> TrackingWindow?
         var now: () -> CFAbsoluteTime
         var displays: () -> [DisplayFrame] = { [] }
-        var cursorCurrent: () -> NSCursor = { NSCursor.arrow }
-        var cursorSet: (NSCursor) -> Void = { $0.set() }
-        var cursorFor: (CursorKind) -> NSCursor = { _ in NSCursor.arrow }
         var makeTimer: (@escaping () -> Void) -> TrackingTimer? = { handler in
             let source = DispatchSource.makeTimerSource(
                 queue: DispatchQueue.global(qos: .userInteractive)
@@ -149,14 +141,20 @@ class Tracker {
             return TrackingTimer(cancel: source.cancel)
         }
         var enqueueCommit: (@escaping () -> Void) -> Void
+        var enqueueActivation: (@escaping () -> Void) -> Void = { work in work() }
         var commitGate: () -> Void = {}
         var commitApplyGate: () -> Void = {}
-        var postMouseMoved: (CGEvent) -> Void = { $0.post(tap: .cghidEventTap) }
+        var postMouseMoved: (CGEvent, CGEventTapProxy?) -> Void = { event, proxy in
+            if let proxy {
+                event.tapPostEvent(proxy)
+            } else {
+                event.post(tap: .cghidEventTap)
+            }
+        }
         var installEventTap: Bool
 
         static var live: Self {
             return Self(
-                trusted: { isTrusted(prompt: false) },
                 windowAt: { AXUIElement.window(at: $0)?.trackingWindow },
                 now: { CFAbsoluteTimeGetCurrent() },
                 displays: {
@@ -167,22 +165,12 @@ class Tracker {
                         primaryFrame: primaryFrame
                     )
                 },
-                cursorCurrent: { NSCursor.currentSystem ?? NSCursor.arrow },
-                cursorSet: { $0.set() },
-                cursorFor: { kind in
-                    switch kind {
-                    case .move:
-                        return NSCursor.closedHand
-                    case .resize(.topLeft), .resize(.bottomRight):
-                        return NSCursor.frameResize(position: .topLeft, directions: .all)
-                    case .resize(.topRight), .resize(.bottomLeft):
-                        return NSCursor.frameResize(position: .topRight, directions: .all)
-                    }
-                },
                 enqueueCommit: { work in Tracker.commitQueue.async(execute: work) },
+                enqueueActivation: { work in Tracker.commitQueue.async(execute: work) },
                 installEventTap: true
             )
         }
+
     }
 
 
@@ -235,6 +223,24 @@ class Tracker {
         let commitState: CommitGenerationState
     }
 
+    private struct PreparedTracking {
+        let window: TrackingWindow
+        let origin: CGPoint
+        let size: CGSize
+        let canSetOrigin: Bool
+        let canSetSize: Bool
+    }
+
+    private struct PendingActivation {
+        let generation: UInt64
+        let state: State
+        let requestLocation: CGPoint
+        var location: CGPoint
+        let dragButton: Int64?
+        let waitForDrag: Bool
+        var prepared: PreparedTracking?
+    }
+
     private let dependencies: Dependencies
     private var eventTapThread: EventTapThread?
     private var eventTap: CFMachPort?
@@ -246,16 +252,19 @@ class Tracker {
     private var focusWindowOnManipulation = Current.defaults().bool(
         forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
     )
+    private var resizeFromNearestCorner: Bool = Current.defaults().bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
+    private var currentDisplays: [DisplayFrame]
     private var lastEventTime: CFAbsoluteTime = 0
     private var activeDragButton: Int64?
-    private var priorCursor: NSCursor?
-    private var activeCursor: CursorKind?
+    private var pendingActivation: PendingActivation?
+    private var activationGeneration: UInt64 = 0
     private static let maxEventAbsorptionTime: CFAbsoluteTime = 5.0  // Max 5 seconds of continuous absorption
     private static let syntheticMouseMovedMarker: Int64 = 0x4152_4D4F_5645
 
 
     init(dependencies: Dependencies = .live) throws {
         self.dependencies = dependencies
+        currentDisplays = dependencies.displays()
         if dependencies.installEventTap {
             assert(Thread.isMainThread)
             let tapThread = try EventTapThread { [unowned self] in
@@ -269,6 +278,12 @@ class Tracker {
                 selector: #selector(readModifiers),
                 name: UserDefaults.didChangeNotification,
                 object: Current.defaults()
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(readDisplays),
+                name: NSApplication.didChangeScreenParametersNotification,
+                object: nil
             )
         }
     }
@@ -296,6 +311,18 @@ class Tracker {
         }
     }
 
+    @objc private func readDisplays() {
+        assert(Thread.isMainThread)
+        let displays = dependencies.displays()
+        guard let eventTapThread else {
+            currentDisplays = displays
+            return
+        }
+        eventTapThread.perform { [weak self] in
+            self?.currentDisplays = displays
+        }
+    }
+
     private func loadModifiers() {
         moveModifiers = Modifiers<Move>(forKey: .moveModifiers, defaults: Current.defaults())
         resizeModifiers = Modifiers<Resize>(forKey: .resizeModifiers, defaults: Current.defaults())
@@ -303,16 +330,15 @@ class Tracker {
         focusWindowOnManipulation = Current.defaults().bool(
             forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
         )
+        resizeFromNearestCorner = Current.defaults().bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
     }
-    public func handleEvent(_ event: CGEvent, type: CGEventType) -> Bool {
+    public func handleEvent(
+        _ event: CGEvent,
+        type: CGEventType,
+        proxy: CGEventTapProxy? = nil
+    ) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            guard dependencies.trusted() else {
-                resetTrackingState()
-                DispatchQueue.main.async { Tracker.disable() }
-                return false
-            }
-            // need to re-enable our eventTap (We got disabled. Usually happens on a slow resizing app)
-            log(.debug, "Re-enabling")
+            log(.debug, "Re-enabling event tap")
             resetTrackingState()
             if let eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
@@ -334,12 +360,55 @@ class Tracker {
                                 type == .rightMouseDown || type == .rightMouseUp ||
                                 type == .otherMouseDown || type == .otherMouseUp
         let isMouseUp = type == .leftMouseUp || type == .rightMouseUp || type == .otherMouseUp
+        let isMouseDown = type == .leftMouseDown || type == .rightMouseDown || type == .otherMouseDown
 
         func absorbActiveEvent(_ handled: Bool) -> Bool {
             guard !isFlagsChangedEvent else { return false }
             guard handled, isDragEvent else { return handled }
-            postSyntheticMouseMoved(for: event)
+            postSyntheticMouseMoved(for: event, proxy: proxy)
             return true
+        }
+        if requireDragToActivate,
+           currentState == .idle,
+           pendingActivation == nil,
+           isMouseDown {
+            let nextState = state(for: event.flags)
+            if nextState != .idle {
+                requestTracking(
+                    at: event.location,
+                    state: nextState,
+                    dragButton: event.getIntegerValueField(.mouseEventButtonNumber),
+                    waitForDrag: true
+                )
+            }
+            return false
+        }
+
+        if var pending = pendingActivation,
+           isDragEvent || isStateReevaluationEvent || isMouseButtonEvent {
+            if requireDragToActivate,
+               isMouseUp,
+               let button = pending.dragButton,
+               event.getIntegerValueField(.mouseEventButtonNumber) == button {
+                cancelPendingActivation()
+                return false
+            }
+
+            guard state(for: event.flags) == pending.state else {
+                cancelPendingActivation()
+                return false
+            }
+            pending.location = event.location
+            pendingActivation = pending
+            if isDragEvent {
+                guard pending.prepared != nil else {
+                    cancelPendingActivation()
+                    return false
+                }
+                activatePending()
+                return currentState != .idle && absorbActiveEvent(true)
+            }
+            return false
         }
 
         // Drag-only mode must not consume button transitions. Once a drag has
@@ -360,12 +429,6 @@ class Tracker {
 
         // Re-evaluate active state for mouse and modifier events, but only mouse events may be absorbed.
         if currentState != .idle && (isDragEvent || isStateReevaluationEvent || isMouseButtonEvent) {
-            guard dependencies.trusted() else {
-                log(.error, "⚠️ Accessibility permissions lost during event handling - aborting")
-                resetTrackingState()
-                DispatchQueue.main.async { Tracker.disable() }
-                return false
-            }
             let currentTime = dependencies.now()
             
             // Safety timeout: if we've been absorbing events for too long, reset to idle
@@ -394,27 +457,21 @@ class Tracker {
                     guard updateTargetForRelease(at: event.location) else { return false }
                     resetTrackingState()
                     return absorbActiveEvent(isMouseButtonEvent ? false : true)
-                case (.moving, .resizing):
-                    guard startTracking(at: event.location, state: nextState) else {
-                        resetTrackingState()
-                        return false
-                    }
-                    currentState = nextState
-                    return absorbActiveEvent(true)
-                case (.resizing, .moving):
-                    guard startTracking(at: event.location, state: nextState) else {
-                        resetTrackingState()
-                        return false
-                    }
-                    currentState = nextState
-                    return absorbActiveEvent(true)
+                case (.moving, .resizing), (.resizing, .moving):
+                    requestTracking(
+                        at: event.location,
+                        state: nextState,
+                        dragButton: activeDragButton,
+                        waitForDrag: false
+                    )
+                    return currentState != .idle && absorbActiveEvent(true)
                 default:
                     break
             }
         }
 
-        if requireDragToActivate && !isDragEvent {
-            return false  // Only respond to drag events when drag-only mode is enabled
+        if requireDragToActivate {
+            return false
         }
         if !requireDragToActivate && !isStateReevaluationEvent && !isDragEvent {
             return false  // In normal mode, respond to mouse movement, drags, and modifier changes
@@ -424,10 +481,6 @@ class Tracker {
         let nextState = state(for: event.flags)
 
         guard nextState != .idle else { return false }
-        guard dependencies.trusted() else {
-            log(.error, "⚠️ Accessibility permission unavailable; passing event through")
-            return false
-        }
 
         switch (currentState, nextState) {
             // .idle -> X
@@ -436,14 +489,15 @@ class Tracker {
                 break
             case (.idle, .moving),
                  (.idle, .resizing):
-                guard startTracking(at: event.location, state: nextState) else {
-                    resetTrackingState()
-                    return false
-                }
-                if requireDragToActivate {
-                    activeDragButton = event.getIntegerValueField(.mouseEventButtonNumber)
-                }
-                absorbEvent = true
+                requestTracking(
+                    at: event.location,
+                    state: nextState,
+                    dragButton: requireDragToActivate
+                        ? event.getIntegerValueField(.mouseEventButtonNumber)
+                        : nil,
+                    waitForDrag: false
+                )
+                absorbEvent = currentState != .idle
 
             // .moving -> X
             case (.moving, .moving):
@@ -456,24 +510,22 @@ class Tracker {
             case (.resizing, .idle):
                 break
             case (.resizing, .moving):
-                guard startTracking(at: event.location, state: nextState) else {
-                    resetTrackingState()
-                    return false
-                }
-                if requireDragToActivate {
-                    activeDragButton = event.getIntegerValueField(.mouseEventButtonNumber)
-                }
+                requestTracking(
+                    at: event.location,
+                    state: nextState,
+                    dragButton: activeDragButton,
+                    waitForDrag: false
+                )
                 absorbEvent = true
             case (.resizing, .resizing):
                 absorbEvent = resize(delta: trackingDelta(at: event.location))  // Block default actions while resizing
         }
 
-        currentState = nextState
 
         return absorbActiveEvent(absorbEvent)
     }
 
-    private func postSyntheticMouseMoved(for event: CGEvent) {
+    private func postSyntheticMouseMoved(for event: CGEvent, proxy: CGEventTapProxy?) {
         guard let mouseMoved = CGEvent(
             mouseEventSource: nil,
             mouseType: .mouseMoved,
@@ -485,12 +537,12 @@ class Tracker {
             .eventSourceUserData,
             value: Self.syntheticMouseMovedMarker
         )
-        dependencies.postMouseMoved(mouseMoved)
+        dependencies.postMouseMoved(mouseMoved, proxy)
     }
 
 
     private func resetTrackingState() {
-        restoreCursor()
+        cancelPendingActivation()
         currentState = .idle
         lastEventTime = 0
         activeDragButton = nil
@@ -508,21 +560,6 @@ class Tracker {
         }
     }
 
-    private func setCursor(for kind: CursorKind) {
-        if priorCursor == nil {
-            priorCursor = dependencies.cursorCurrent()
-        }
-        guard activeCursor != kind else { return }
-        dependencies.cursorSet(dependencies.cursorFor(kind))
-        activeCursor = kind
-    }
-
-    private func restoreCursor() {
-        guard let priorCursor else { return }
-        dependencies.cursorSet(priorCursor)
-        self.priorCursor = nil
-        activeCursor = nil
-    }
 
 
     private func state(for modifiers: CGEventFlags) -> State {
@@ -539,46 +576,130 @@ class Tracker {
     }
 
 
-    @discardableResult
-    private func startTracking(at location: CGPoint, state: State) -> Bool {
+    private func requestTracking(
+        at location: CGPoint,
+        state: State,
+        dragButton: Int64?,
+        waitForDrag: Bool
+    ) {
+        currentState = .idle
+        lastEventTime = 0
+        activeDragButton = nil
         finishTrackingInfo()
 
-        guard let trackedWindow = dependencies.windowAt(location),
-              let origin = trackedWindow.origin(),
-              let size = trackedWindow.size() else { return false }
+        activationGeneration &+= 1
+        let generation = activationGeneration
+        pendingActivation = PendingActivation(
+            generation: generation,
+            state: state,
+            requestLocation: location,
+            location: location,
+            dragButton: dragButton,
+            waitForDrag: waitForDrag,
+            prepared: nil
+        )
+        let eventTapThread = eventTapThread
 
-        let corner = Current.defaults().bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
-            ? Corner.corner(for: location - origin, in: size)
-            : .bottomRight
-        switch state {
-        case .moving:
-            guard trackedWindow.canSetOrigin() else { return false }
-        case .resizing:
-            guard trackedWindow.canSetSize() else { return false }
-            if case .bottomRight = corner {
-                break
-            } else {
-                guard trackedWindow.canSetOrigin() else { return false }
+        dependencies.enqueueActivation { [weak self] in
+            guard let self else { return }
+            let prepared = self.prepareTracking(at: location)
+            let complete: () -> Void = { [weak self] in
+                guard let self else { return }
+                self.completeActivation(generation: generation, prepared: prepared)
             }
+            if let eventTapThread {
+                eventTapThread.perform(complete)
+            } else {
+                complete()
+            }
+        }
+    }
+
+    private func prepareTracking(at location: CGPoint) -> PreparedTracking? {
+        guard let window = dependencies.windowAt(location),
+              let origin = window.origin(),
+              let size = window.size() else { return nil }
+        return PreparedTracking(
+            window: window,
+            origin: origin,
+            size: size,
+            canSetOrigin: window.canSetOrigin(),
+            canSetSize: window.canSetSize()
+        )
+    }
+
+    private func completeActivation(generation: UInt64, prepared: PreparedTracking?) {
+        guard var pending = pendingActivation,
+              pending.generation == generation else { return }
+        guard let prepared else {
+            pendingActivation = nil
+            return
+        }
+        pending.prepared = prepared
+        pendingActivation = pending
+        if !pending.waitForDrag {
+            activatePending()
+        }
+    }
+
+    private func activatePending() {
+        guard let pending = pendingActivation,
+              let prepared = pending.prepared else { return }
+        pendingActivation = nil
+
+        let corner = resizeFromNearestCorner
+            ? Corner.corner(for: pending.location - prepared.origin, in: prepared.size)
+            : .bottomRight
+        switch pending.state {
+        case .moving:
+            guard prepared.canSetOrigin else { return }
+        case .resizing:
+            guard prepared.canSetSize,
+                  corner == .bottomRight || prepared.canSetOrigin else { return }
         case .idle:
-            return false
+            return
         }
 
+        guard activateTracking(
+            prepared,
+            at: pending.requestLocation,
+            state: pending.state,
+            corner: corner
+        ) else { return }
+        currentState = pending.state
+        activeDragButton = pending.dragButton
+        if pending.location != pending.requestLocation {
+            switch pending.state {
+            case .moving:
+                _ = move(to: pending.location)
+            case .resizing:
+                _ = resize(delta: trackingDelta(at: pending.location))
+            case .idle:
+                break
+            }
+        }
+    }
+    private func activateTracking(
+        _ prepared: PreparedTracking,
+        at location: CGPoint,
+        state: State,
+        corner: Corner
+    ) -> Bool {
         let startTime = dependencies.now()
-        let initialRect = roundedTargetRect(origin: origin, size: size)
+        let initialRect = roundedTargetRect(origin: prepared.origin, size: prepared.size)
         let generation = withTrackingLock {
             trackingInfo.generation &+= 1
             let commitState = CommitGenerationState(
                 generation: trackingInfo.generation,
                 lastCommittedRect: initialRect
             )
-            trackingInfo.window = trackedWindow
-            trackingInfo.origin = origin
-            trackingInfo.size = size
+            trackingInfo.window = prepared.window
+            trackingInfo.origin = prepared.origin
+            trackingInfo.size = prepared.size
             trackingInfo.corner = corner
             trackingInfo.state = state
             trackingInfo.location = location
-            trackingInfo.initialOrigin = origin
+            trackingInfo.initialOrigin = prepared.origin
             trackingInfo.initialLocation = location
             trackingInfo.targetRect = initialRect
             trackingInfo.lastCommittedRect = initialRect
@@ -601,17 +722,20 @@ class Tracker {
             trackingTimer = timer
             return true
         }
-        if !timerIsCurrent {
+        guard timerIsCurrent else {
             timer.cancel()
             return false
         }
-
         if focusWindowOnManipulation {
-            trackedWindow.focus()
+            dependencies.enqueueCommit {
+                prepared.window.focus()
+            }
         }
-
-        setCursor(for: state == .moving ? .move : .resize(corner))
         return true
+    }
+
+    private func cancelPendingActivation() {
+        pendingActivation = nil
     }
 
     private func trackingDelta(at location: CGPoint) -> Delta {
@@ -645,7 +769,7 @@ class Tracker {
             trackingInfo.origin = constrainedOrigin(
                 proposed: trackingInfo.initialOrigin + Delta(dx: displacement.x, dy: displacement.y),
                 windowSize: trackingInfo.size,
-                displays: dependencies.displays()
+                displays: currentDisplays
             )
             trackingInfo.targetRect = roundedTargetRect(
                 origin: trackingInfo.origin,
@@ -842,12 +966,6 @@ class Tracker {
         }
         aborted.1?.cancel()
 
-        guard dependencies.trusted() else {
-            DispatchQueue.main.async {
-                Tracker.disable()
-            }
-            return
-        }
         guard aborted.0 else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -862,7 +980,6 @@ class Tracker {
     }
 
     private func resetEventStateAfterCommitFailure() {
-        restoreCursor()
         currentState = .idle
         lastEventTime = 0
         activeDragButton = nil
@@ -871,7 +988,6 @@ class Tracker {
     private func shutdown() {
         guard let eventTapThread else {
             trackingTimer?.cancel()
-            restoreCursor()
             return
         }
         eventTapThread.performAndWait { [weak self] in
@@ -945,7 +1061,7 @@ private func myCGEventCallback(proxy: CGEventTapProxy, type: CGEventType, event:
         return Unmanaged.passUnretained(event)
     }
     let tracker = Unmanaged<Tracker>.fromOpaque(refcon).takeUnretainedValue()
-    let absorbEvent = tracker.handleEvent(event, type: type)
+    let absorbEvent = tracker.handleEvent(event, type: type, proxy: proxy)
 
     return absorbEvent ? nil : Unmanaged.passUnretained(event)
 }
