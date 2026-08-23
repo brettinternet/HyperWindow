@@ -96,7 +96,8 @@ AuthKey_*.p8
 *.log
 
 # Documentation build
-docs/
+docs/*
+!docs/*.md
 
 # Test coverage
 *.gcov
