@@ -243,6 +243,9 @@ class Tracker {
     private var moveModifiers = Modifiers<Move>(forKey: .moveModifiers, defaults: Current.defaults())
     private var resizeModifiers = Modifiers<Resize>(forKey: .resizeModifiers, defaults: Current.defaults())
     private var requireDragToActivate: Bool = Current.defaults().bool(forKey: DefaultsKeys.requireDragToActivate.rawValue)
+    private var focusWindowOnManipulation = Current.defaults().bool(
+        forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
+    )
     private var lastEventTime: CFAbsoluteTime = 0
     private var activeDragButton: Int64?
     private var priorCursor: NSCursor?
@@ -297,6 +300,9 @@ class Tracker {
         moveModifiers = Modifiers<Move>(forKey: .moveModifiers, defaults: Current.defaults())
         resizeModifiers = Modifiers<Resize>(forKey: .resizeModifiers, defaults: Current.defaults())
         requireDragToActivate = Current.defaults().bool(forKey: DefaultsKeys.requireDragToActivate.rawValue)
+        focusWindowOnManipulation = Current.defaults().bool(
+            forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
+        )
     }
     public func handleEvent(_ event: CGEvent, type: CGEventType) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -598,6 +604,10 @@ class Tracker {
         if !timerIsCurrent {
             timer.cancel()
             return false
+        }
+
+        if focusWindowOnManipulation {
+            trackedWindow.focus()
         }
 
         setCursor(for: state == .moving ? .move : .resize(corner))

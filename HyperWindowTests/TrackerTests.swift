@@ -116,6 +116,27 @@ final class TrackerTests: XCTestCase {
         XCTAssertEqual(window.origin.x, 5)
     }
 
+    func testFocusesEachMovedAndResizedWindowWhenEnabled() throws {
+        defaults.set(true, forKey: DefaultsKeys.focusWindowOnManipulation.rawValue)
+        let window = FakeWindow()
+        let tracker = try makeTracker(window: window)
+
+        XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
+        XCTAssertTrue(tracker.handleEvent(event(flags: []), type: .mouseMoved))
+        XCTAssertTrue(tracker.handleEvent(event(flags: .maskAlternate), type: .mouseMoved))
+
+        XCTAssertEqual(window.focusCount, 2)
+    }
+
+    func testDoesNotFocusMovedWindowWhenDisabled() throws {
+        let window = FakeWindow()
+        let tracker = try makeTracker(window: window)
+
+        XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
+
+        XCTAssertEqual(window.focusCount, 0)
+    }
+
     func testModifierReleaseEndsOperationWithoutConsumingMouseUp() throws {
         let tracker = try makeTracker(window: FakeWindow())
         XCTAssertTrue(tracker.handleEvent(event(flags: .maskControl), type: .mouseMoved))
@@ -1045,6 +1066,7 @@ private final class FakeWindow {
     private var storedSizeWriteCount = 0
     private var storedOriginReadCount = 0
     private var storedSizeReadCount = 0
+    private var storedFocusCount = 0
 
     var origin: CGPoint {
         get { withLock { storedOrigin } }
@@ -1058,6 +1080,7 @@ private final class FakeWindow {
     var sizeWriteCount: Int { withLock { storedSizeWriteCount } }
     var originReadCount: Int { withLock { storedOriginReadCount } }
     var sizeReadCount: Int { withLock { storedSizeReadCount } }
+    var focusCount: Int { withLock { storedFocusCount } }
 
     var canSetOrigin = true
     var canSetSize = true
@@ -1072,6 +1095,7 @@ private final class FakeWindow {
         size: { [unowned self] in readSize() },
         canSetOrigin: { [unowned self] in canSetOrigin },
         canSetSize: { [unowned self] in canSetSize },
+        focus: { [unowned self] in withLock { storedFocusCount += 1 } },
         setOrigin: { [unowned self] value in setOrigin(value) },
         setSize: { [unowned self] value in setSize(value) }
     )

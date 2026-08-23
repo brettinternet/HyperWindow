@@ -9,7 +9,7 @@ final class PreferencesControllerTests: XCTestCase {
         controller.loadWindow()
 
         controller.updateAccessibilityStatus(trusted: false)
-        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 282))
+        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 308))
         let expandedTopEdge = try XCTUnwrap(controller.window).frame.maxY
         XCTAssertFalse(controller.accessibilityStatusLabel.isHidden)
         XCTAssertFalse(controller.openSystemSettingsButton.isHidden)
@@ -19,7 +19,7 @@ final class PreferencesControllerTests: XCTestCase {
         )
 
         controller.updateAccessibilityStatus(trusted: true)
-        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 230))
+        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 256))
         XCTAssertEqual(controller.window?.frame.maxY, expandedTopEdge)
         XCTAssertTrue(controller.accessibilityStatusLabel.isHidden)
         XCTAssertTrue(controller.openSystemSettingsButton.isHidden)
@@ -67,6 +67,26 @@ final class PreferencesControllerTests: XCTestCase {
         XCTAssertEqual(updated, [.fn])
     }
 
+    func testFocusWindowPreferenceCanBeEnabledAndDisabled() {
+        let defaults = testUserDefaults()
+        registerDefaultPreferences(in: defaults)
+        let originalDefaults = Current.defaults
+        Current.defaults = { defaults }
+        defer { Current.defaults = originalDefaults }
+
+        let controller = PreferencesController()
+        let focusButton = NSButton()
+        controller.focusWindowOnManipulation = focusButton
+
+        controller.focusWindowOnManipulationClicked(focusButton)
+        XCTAssertTrue(defaults.bool(forKey: DefaultsKeys.focusWindowOnManipulation.rawValue))
+        XCTAssertEqual(focusButton.state, .on)
+
+        controller.focusWindowOnManipulationClicked(focusButton)
+        XCTAssertFalse(defaults.bool(forKey: DefaultsKeys.focusWindowOnManipulation.rawValue))
+        XCTAssertEqual(focusButton.state, .off)
+    }
+
     func testGeneralCheckboxRowsAlignWithShortcutRows() throws {
         let controller = PreferencesController(windowNibName: "PreferencesController")
         controller.loadWindow()
@@ -82,7 +102,8 @@ final class PreferencesControllerTests: XCTestCase {
             XCTUnwrap(controller.resizeFromNearestCorner),
             XCTUnwrap(controller.showMenuIcon),
             XCTUnwrap(controller.launchAtLogin),
-            XCTUnwrap(controller.requireDragToActivate)
+            XCTUnwrap(controller.requireDragToActivate),
+            XCTUnwrap(controller.focusWindowOnManipulation)
         ]
         let generalRowYs = generalRows.map {
             contentView.convert($0.bounds, from: $0).minY
@@ -91,7 +112,7 @@ final class PreferencesControllerTests: XCTestCase {
         XCTAssertEqual(resizeTopY, generalRowYs[0], accuracy: 0.001)
         XCTAssertEqual(
             zip(generalRowYs, generalRowYs.dropFirst()).map { $0.0 - $0.1 },
-            [26, 25, 25]
+            [26, 25, 25, 26]
         )
     }
 }

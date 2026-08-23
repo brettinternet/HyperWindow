@@ -17,6 +17,7 @@ struct TrackingWindow {
     let size: () -> CGSize?
     let canSetOrigin: () -> Bool
     let canSetSize: () -> Bool
+    let focus: () -> Void
     let setOrigin: (CGPoint) -> Bool
     let setSize: (CGSize) -> Bool
 }

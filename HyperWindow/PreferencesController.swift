@@ -23,6 +23,7 @@ class PreferencesController: NSWindowController {
     @IBOutlet weak var showMenuIcon: NSButton!
     @IBOutlet weak var launchAtLogin: NSButton!
     @IBOutlet weak var requireDragToActivate: NSButton!
+    @IBOutlet weak var focusWindowOnManipulation: NSButton!
 
     @IBOutlet weak var versionLabel: NSTextField!
     @IBOutlet weak var accessibilityStatusLabel: NSTextField!
@@ -32,6 +33,7 @@ class PreferencesController: NSWindowController {
     override func windowDidLoad() {
         super.windowDidLoad()
         updateModifierButtonStates()
+        updateFocusWindowPreferenceState()
         updateAccessibilityStatus()
         updateLaunchAtLoginState()
         updateCopy()
@@ -42,6 +44,7 @@ class PreferencesController: NSWindowController {
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         updateModifierButtonStates()
+        updateFocusWindowPreferenceState()
         updateAccessibilityStatus()
         updateLaunchAtLoginState()
         updateCopy()
@@ -135,6 +138,13 @@ class PreferencesController: NSWindowController {
         Tracker.shared?.readModifiers()  // Update the tracker with new setting
         updateCopy()
     }
+
+    @IBAction func focusWindowOnManipulationClicked(_ sender: Any) {
+        let key = DefaultsKeys.focusWindowOnManipulation.rawValue
+        Current.defaults().set(!Current.defaults().bool(forKey: key), forKey: key)
+        Tracker.shared?.readModifiers()
+        updateFocusWindowPreferenceState()
+    }
     
     @IBAction func openSystemSettingsClicked(_ sender: Any) {
         // Ask Accessibility for the native prompt first. On macOS versions
@@ -187,6 +197,7 @@ extension PreferencesController: NSWindowDelegate {
 
         requireDragToActivate?.state = Current.defaults().bool(forKey: DefaultsKeys.requireDragToActivate.rawValue)
             ? .on : .off
+        updateFocusWindowPreferenceState()
 
         updateAccessibilityStatus()
         updateCopy()
@@ -220,10 +231,17 @@ extension PreferencesController: NSWindowDelegate {
             resizeFromNearestCorner,
             showMenuIcon,
             launchAtLogin,
-            requireDragToActivate
+            requireDragToActivate,
+            focusWindowOnManipulation
         ] {
             button?.frame.origin.y += offset
         }
+    }
+
+    private func updateFocusWindowPreferenceState() {
+        focusWindowOnManipulation?.state = Current.defaults().bool(
+            forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
+        ) ? .on : .off
     }
 
     func updateAccessibilityStatus(trusted trustedState: Bool? = nil) {
@@ -238,7 +256,7 @@ extension PreferencesController: NSWindowDelegate {
             accessibilityStatusLabel?.textColor = NSColor.systemOrange
             openSystemSettingsButton?.isHidden = false
         }
-        resizeSettingsWindow(contentHeight: isEnabled ? 230 : 282)
+        resizeSettingsWindow(contentHeight: isEnabled ? 256 : 308)
         alignGeneralCheckboxRows()
     }
     

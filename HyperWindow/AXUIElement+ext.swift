@@ -245,6 +245,16 @@ extension AXUIElement {
         }
     }
 
+    func focus() {
+        var processIdentifier: pid_t = 0
+        if AXUIElementGetPid(self, &processIdentifier) == .success {
+            NSRunningApplication(processIdentifier: processIdentifier)?.activate()
+        }
+        if AXUIElementPerformAction(self, NSAccessibility.Action.raise as CFString) != .success {
+            log(.debug, "ERROR: failed to focus window")
+        }
+    }
+
     @discardableResult
     func setOrigin(_ newValue: CGPoint) -> Bool {
         let success = withUnsafePointer(to: newValue) { ptr -> Bool in
@@ -328,6 +338,7 @@ extension AXUIElement {
             size: { [self] in size },
             canSetOrigin: { [self] in isOriginSettable },
             canSetSize: { [self] in isSizeSettable },
+            focus: { [self] in focus() },
             setOrigin: { [self] value in setOrigin(value) },
             setSize: { [self] value in setSize(value) }
         )

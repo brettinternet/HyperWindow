@@ -12,7 +12,7 @@ When the modifiers are active, the cursor position can resize or move the window
 
 ![settings window](./assets/screenshot.png)
 
-You may resize from the nearest corner instead of a left-to-right resize. It's also possible to enable activation by the mouse drag action instead of merely hovering over the window.
+You may resize from the nearest corner instead of a left-to-right resize. It's also possible to enable activation by the mouse drag action instead of merely hovering over the window, or focus a window whenever HyperWindow moves or resizes it.
 
 ## Releases
 

@@ -9,6 +9,7 @@ final class DefaultsTests: XCTestCase {
         registerDefaultPreferences(in: defaults)
 
         XCTAssertTrue(defaults.bool(forKey: DefaultsKeys.showMenuIcon.rawValue))
+        XCTAssertFalse(defaults.bool(forKey: DefaultsKeys.focusWindowOnManipulation.rawValue))
     }
 
     func test_registers_shortcut_defaults() {

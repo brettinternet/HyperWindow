@@ -8,6 +8,7 @@
         <customObject id="-2" userLabel="File's Owner" customClass="PreferencesController" customModule="HyperWindow" customModuleProvider="target">
             <connections>
                 <outlet property="accessibilityStatusLabel" destination="jFx-3h-BvR" id="accessibilityStatusLabel-outlet"/>
+                <outlet property="focusWindowOnManipulation" destination="focus-window-on-manipulation" id="focus-window-on-manipulation-outlet"/>
                 <outlet property="githubLink" destination="github-attribution-link" id="github-link-outlet"/>
                 <outlet property="modifierConflictLabel" destination="modifier-conflict-label" id="modifier-conflict-outlet"/>
                 <outlet property="launchAtLogin" destination="TnR-QZ-Jig" id="launchAtLogin-outlet"/>
@@ -34,14 +35,14 @@
         <window title="HyperWindow Settings" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="YES" releasedWhenClosed="NO" animationBehavior="default" id="F0z-JX-Cv5">
             <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
-            <rect key="contentRect" x="196" y="240" width="390" height="282"/>
+            <rect key="contentRect" x="196" y="240" width="390" height="308"/>
             <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
             <view key="contentView" wantsLayer="YES" id="se5-gp-TjO">
-                <rect key="frame" x="0.0" y="0.0" width="390" height="282"/>
+                <rect key="frame" x="0.0" y="0.0" width="390" height="308"/>
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="move-title-label">
-                        <rect key="frame" x="26" y="245" width="60" height="14"/>
+                        <rect key="frame" x="26" y="271" width="60" height="14"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <textFieldCell key="cell" lineBreakMode="clipping" title="Move" id="move-title-cell">
                             <font key="font" metaFont="smallSystem"/>
@@ -49,7 +50,7 @@
                         </textFieldCell>
                     </textField>
                     <box autoresizesSubviews="NO" toolTip="Select which modifier keys to hold when moving windows. Hold these keys and move your mouse to drag windows around the screen." fixedFrame="YES" borderType="line" translatesAutoresizingMaskIntoConstraints="NO" id="7aw-kd-4Fq">
-                        <rect key="frame" x="18" y="127" width="84" height="126"/>
+                        <rect key="frame" x="18" y="153" width="84" height="126"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <view key="contentView" id="Xtr-41-rxU">
                             <rect key="frame" x="4" y="5" width="76" height="116"/>
@@ -114,7 +115,7 @@
                         </view>
                     </box>
                     <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="resize-title-label">
-                        <rect key="frame" x="124" y="245" width="60" height="14"/>
+                        <rect key="frame" x="124" y="271" width="60" height="14"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <textFieldCell key="cell" lineBreakMode="clipping" title="Resize" id="resize-title-cell">
                             <font key="font" metaFont="smallSystem"/>
@@ -122,7 +123,7 @@
                         </textFieldCell>
                     </textField>
                     <box autoresizesSubviews="NO" fixedFrame="YES" borderType="line" translatesAutoresizingMaskIntoConstraints="NO" id="fRg-Ig-lQz">
-                        <rect key="frame" x="116" y="127" width="84" height="126"/>
+                        <rect key="frame" x="116" y="153" width="84" height="126"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <string key="toolTip">Select which modifier keys to hold when resizing windows. Hold these keys and move your mouse to resize windows from their corners.</string>
                         <view key="contentView" id="PNo-mj-ccR">
@@ -188,7 +189,7 @@
                         </view>
                     </box>
                     <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="bBy-AW-VTy">
-                        <rect key="frame" x="210" y="212" width="162" height="18"/>
+                        <rect key="frame" x="210" y="238" width="162" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <string key="toolTip">When enabled, window resizes will use the corner closest to your cursor. When disabled, resizes always use the bottom-right corner.</string>
                         <buttonCell key="cell" type="check" title="Resize from corners" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="Bo4-fU-O3J">
@@ -200,7 +201,7 @@
                         </connections>
                     </button>
                     <button toolTip="Shows or hides the HyperWindow icon in the menu bar. Use the menu bar icon to access preferences and quit the app." verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="pNU-or-TOn">
-                        <rect key="frame" x="210" y="186" width="162" height="18"/>
+                        <rect key="frame" x="210" y="212" width="162" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <buttonCell key="cell" type="check" title="Show menu icon" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="veU-QV-ewB">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -211,7 +212,7 @@
                         </connections>
                     </button>
                     <button toolTip="Automatically starts HyperWindow when you log in to your Mac. The app will run in the background and be ready to use immediately." verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="TnR-QZ-Jig">
-                        <rect key="frame" x="210" y="161" width="162" height="18"/>
+                        <rect key="frame" x="210" y="187" width="162" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <buttonCell key="cell" type="check" title="Launch at login" bezelStyle="regularSquare" imagePosition="left" inset="2" id="cdX-Sz-m46">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -222,7 +223,7 @@
                         </connections>
                     </button>
                     <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="dTt-aK-ndS">
-                        <rect key="frame" x="210" y="136" width="162" height="18"/>
+                        <rect key="frame" x="210" y="162" width="162" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <string key="toolTip">When enabled, windows will only resize or move when you drag the mouse while holding modifiers. When disabled, windows respond to any mouse movement while modifiers are held.</string>
                         <buttonCell key="cell" type="check" title="Require mouse drag" bezelStyle="regularSquare" imagePosition="left" inset="2" id="jAC-Hd-tRx">
@@ -231,6 +232,18 @@
                         </buttonCell>
                         <connections>
                             <action selector="requireDragToActivateClicked:" target="-2" id="CJ8-P0-zVB"/>
+                        </connections>
+                    </button>
+                    <button verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="focus-window-on-manipulation">
+                        <rect key="frame" x="210" y="136" width="180" height="18"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                        <string key="toolTip">When enabled, moving or resizing a window also brings that window into focus.</string>
+                        <buttonCell key="cell" type="check" title="Focus moved windows" bezelStyle="regularSquare" imagePosition="left" inset="2" id="focus-window-on-manipulation-cell">
+                            <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="focusWindowOnManipulationClicked:" target="-2" id="focus-window-on-manipulation-action"/>
                         </connections>
                     </button>
                     <textField hidden="YES" verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" fixedFrame="YES" preferredMaxLayoutWidth="380" translatesAutoresizingMaskIntoConstraints="NO" id="modifier-conflict-label">
