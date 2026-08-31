@@ -23,11 +23,10 @@ func onScreenWindowInfo() -> [CGWindowInfo] {
 func frontmostWindow(
     at position: CGPoint,
     in windowInfo: [CGWindowInfo],
-    excludingPID: pid_t
+    ownedBy ownerPID: pid_t
 ) -> CGWindowHit? {
     for info in windowInfo {
-        guard let ownerPID = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-              ownerPID != excludingPID,
+        guard (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == ownerPID,
               let bounds = info[kCGWindowBounds as String] as? NSDictionary else {
             continue
         }
@@ -114,22 +113,21 @@ extension AXUIElement {
         accessibilityWindowProvider: (CGWindowHit) -> AXUIElement?,
         accessibilityHitTest: (CGPoint) -> AXUIElement?
     ) -> AXUIElement? {
-        guard let hit = frontmostWindow(
-            at: position,
-            in: windowInfoProvider(),
-            excludingPID: getpid()
-        ) else {
+        guard let hitTestWindow = accessibilityHitTest(position),
+              let ownerPID = hitTestWindow.processIdentifier,
+              ownerPID != getpid() else {
             return nil
         }
 
-        if let matchedWindow = accessibilityWindowProvider(hit) {
+        if let hit = frontmostWindow(
+            at: position,
+            in: windowInfoProvider(),
+            ownedBy: ownerPID
+        ),
+        let matchedWindow = accessibilityWindowProvider(hit) {
             return matchedWindow
         }
 
-        guard let hitTestWindow = accessibilityHitTest(position),
-              hitTestWindow.processIdentifier == hit.ownerPID else {
-            return nil
-        }
         return hitTestWindow
     }
 

@@ -15,7 +15,7 @@ final class SystemAPITests: XCTestCase {
         XCTAssertEqual((silent[key] as? NSNumber)?.boolValue, false)
     }
 
-    func testFrontmostWindowUsesCGOrderAcrossWindowLayers() {
+    func testFrontmostWindowUsesCGOrderAcrossWindowLayersForOwner() {
         let point = CGPoint(x: 50, y: 50)
         let fixtures = [
             windowInfo(pid: 10, frame: CGRect(x: 0, y: 0, width: 100, height: 100)),
@@ -24,24 +24,26 @@ final class SystemAPITests: XCTestCase {
             windowInfo(
                 pid: 13,
                 frame: CGRect(x: 0, y: 0, width: 100, height: 100),
+                layer: 3,
                 title: "Front"
             ),
-            windowInfo(pid: 14, frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+            windowInfo(pid: 13, frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         ]
 
         XCTAssertEqual(
-            frontmostWindow(at: point, in: fixtures, excludingPID: 10),
+            frontmostWindow(at: point, in: fixtures, ownedBy: 13),
             CGWindowHit(
-                ownerPID: 11,
+                ownerPID: 13,
                 frame: CGRect(x: 0, y: 0, width: 100, height: 100),
-                title: nil
+                title: "Front"
             )
         )
     }
 
-    func testFrontmostWindowReturnsNilWithoutContainingBounds() {
+    func testFrontmostWindowReturnsNilWithoutContainingBoundsForOwner() {
         let fixtures = [
-            windowInfo(pid: 10, frame: CGRect(x: 0, y: 0, width: 10, height: 10)),
+            windowInfo(pid: 10, frame: CGRect(x: 0, y: 0, width: 100, height: 100)),
+            windowInfo(pid: 11, frame: CGRect(x: 0, y: 0, width: 10, height: 10)),
             [kCGWindowOwnerPID as String: NSNumber(value: 11)]
         ]
 
@@ -49,7 +51,7 @@ final class SystemAPITests: XCTestCase {
             frontmostWindow(
                 at: CGPoint(x: 50, y: 50),
                 in: fixtures,
-                excludingPID: 99
+                ownedBy: 11
             )
         )
     }
@@ -105,32 +107,38 @@ final class SystemAPITests: XCTestCase {
         XCTAssertNil(matchingWindowIndex(for: hit, candidates: candidates))
     }
 
-    func testCGMatchAvoidsAccessibilityHitTestOnHappyPath() {
+    func testAccessibilityHitDeterminesOwnerBeforeCGMatching() {
         let point = CGPoint(x: 50, y: 50)
-        let fixture = windowInfo(
-            pid: getpid() + 1,
-            frame: CGRect(x: 0, y: 0, width: 100, height: 100)
-        )
-        let expected = AXUIElementCreateSystemWide()
+        let overlayPID = getpid() + 1
+        let targetPID = getpid() + 2
+        let hitTestWindow = AXUIElementCreateApplication(targetPID)
+        let matchedWindow = AXUIElementCreateSystemWide()
         var resolvedHit: CGWindowHit?
-        var accessibilityHitTestCalls = 0
 
         let result = AXUIElement.window(
             at: point,
-            windowInfoProvider: { [fixture] },
+            windowInfoProvider: {
+                [
+                    self.windowInfo(
+                        pid: overlayPID,
+                        frame: CGRect(x: 0, y: 0, width: 100, height: 100),
+                        layer: 24
+                    ),
+                    self.windowInfo(
+                        pid: targetPID,
+                        frame: CGRect(x: 0, y: 0, width: 100, height: 100)
+                    )
+                ]
+            },
             accessibilityWindowProvider: {
                 resolvedHit = $0
-                return expected
+                return matchedWindow
             },
-            accessibilityHitTest: { _ in
-                accessibilityHitTestCalls += 1
-                return nil
-            }
+            accessibilityHitTest: { _ in hitTestWindow }
         )
 
-        XCTAssertEqual(resolvedHit?.ownerPID, getpid() + 1)
-        XCTAssertEqual(accessibilityHitTestCalls, 0)
-        XCTAssertTrue(CFEqual(result, expected))
+        XCTAssertEqual(resolvedHit?.ownerPID, targetPID)
+        XCTAssertTrue(CFEqual(result, matchedWindow))
     }
 
     func testFloatingCGWindowUsesExactCGMatchRegardlessOfLayer() {
@@ -141,80 +149,105 @@ final class SystemAPITests: XCTestCase {
             frame: CGRect(x: 0, y: 0, width: 100, height: 100),
             layer: 3
         )
-        let expected = AXUIElementCreateApplication(getpid() + 1)
+        let hitTestWindow = AXUIElementCreateApplication(ownerPID)
+        let matchedWindow = AXUIElementCreateSystemWide()
 
         let result = AXUIElement.window(
             at: point,
             windowInfoProvider: { [fixture] },
             accessibilityWindowProvider: { hit in
                 XCTAssertEqual(hit.ownerPID, ownerPID)
-                return expected
+                return matchedWindow
             },
-            accessibilityHitTest: { _ in
-                XCTFail("A floating window with an exact CG match should not need AX hit testing")
-                return nil
-            }
+            accessibilityHitTest: { _ in hitTestWindow }
         )
 
-        XCTAssertTrue(CFEqual(result, expected))
+        XCTAssertTrue(CFEqual(result, matchedWindow))
     }
 
-    func testUnsupportedFrontmostWindowBlocksUnderlyingAccessibilityHit() {
-        let externalApplication = AXUIElementCreateApplication(getpid() + 2)
+    func testUnmatchedCGOverlayDoesNotBlockAccessibilityHit() {
+        let overlayPID = getpid() + 1
+        let targetPID = getpid() + 2
+        let hitTestWindow = AXUIElementCreateApplication(targetPID)
 
         let result = AXUIElement.window(
             at: CGPoint(x: 50, y: 50),
             windowInfoProvider: {
                 [
-                    windowInfo(
-                        pid: getpid() + 1,
+                    self.windowInfo(
+                        pid: overlayPID,
                         frame: CGRect(x: 0, y: 0, width: 100, height: 100),
-                        layer: 3
+                        layer: 24
                     )
                 ]
             },
-            accessibilityWindowProvider: { _ in nil },
-            accessibilityHitTest: { _ in externalApplication }
+            accessibilityWindowProvider: { _ in
+                XCTFail("CG windows from another process must not override the Accessibility hit")
+                return nil
+            },
+            accessibilityHitTest: { _ in hitTestWindow }
         )
 
-        XCTAssertNil(result)
+        XCTAssertTrue(CFEqual(result, hitTestWindow))
     }
 
-    func testAccessibilityHitTestAcceptsSamePIDAsCGHit() {
+    func testAccessibilityHitIsFallbackWhenSameOwnerCGWindowCannotBeMatched() {
         let ownerPID = getpid() + 1
-        let expected = AXUIElementCreateApplication(ownerPID)
+        let hitTestWindow = AXUIElementCreateApplication(ownerPID)
 
         let result = AXUIElement.window(
             at: CGPoint(x: 50, y: 50),
             windowInfoProvider: {
-                [windowInfo(
+                [self.windowInfo(
                     pid: ownerPID,
                     frame: CGRect(x: 0, y: 0, width: 100, height: 100)
                 )]
             },
             accessibilityWindowProvider: { _ in nil },
-            accessibilityHitTest: { _ in expected }
+            accessibilityHitTest: { _ in hitTestWindow }
         )
 
-        XCTAssertTrue(CFEqual(result, expected))
+        XCTAssertTrue(CFEqual(result, hitTestWindow))
     }
 
-    func testAccessibilityHitTestRejectsDifferentPIDFromCGHit() {
-        let expected = AXUIElementCreateApplication(getpid() + 2)
+    func testMissingAccessibilityHitFailsClosedBeforeReadingCGWindows() {
+        var windowInfoCalls = 0
 
         let result = AXUIElement.window(
             at: CGPoint(x: 50, y: 50),
             windowInfoProvider: {
-                [windowInfo(
-                    pid: getpid() + 1,
-                    frame: CGRect(x: 0, y: 0, width: 100, height: 100)
-                )]
+                windowInfoCalls += 1
+                return []
             },
-            accessibilityWindowProvider: { _ in nil },
-            accessibilityHitTest: { _ in expected }
+            accessibilityWindowProvider: { _ in
+                XCTFail("A missing Accessibility hit must not resolve a CG window")
+                return nil
+            },
+            accessibilityHitTest: { _ in nil }
         )
 
         XCTAssertNil(result)
+        XCTAssertEqual(windowInfoCalls, 0)
+    }
+
+    func testOwnAccessibilityHitFailsClosedBeforeReadingCGWindows() {
+        var windowInfoCalls = 0
+
+        let result = AXUIElement.window(
+            at: CGPoint(x: 50, y: 50),
+            windowInfoProvider: {
+                windowInfoCalls += 1
+                return []
+            },
+            accessibilityWindowProvider: { _ in
+                XCTFail("HyperWindow must not target its own windows")
+                return nil
+            },
+            accessibilityHitTest: { _ in AXUIElementCreateApplication(getpid()) }
+        )
+
+        XCTAssertNil(result)
+        XCTAssertEqual(windowInfoCalls, 0)
     }
 
     private func windowInfo(
