@@ -115,4 +115,21 @@ final class PreferencesControllerTests: XCTestCase {
             [26, 25, 25, 26]
         )
     }
+
+    func testSettingsVersionIncludesCommitForUntaggedBuild() {
+        let version = settingsVersion(infoDictionary: [
+            "CFBundleShortVersionString": "1.2.3",
+            "GitCommit": "abc1234"
+        ])
+
+        XCTAssertEqual(version, "1.2.3 (abc1234)")
+    }
+
+    func testSettingsVersionOmitsCommitForTaggedBuild() {
+        let version = settingsVersion(infoDictionary: [
+            "CFBundleShortVersionString": "1.2.3"
+        ])
+
+        XCTAssertEqual(version, "1.2.3")
+    }
 }

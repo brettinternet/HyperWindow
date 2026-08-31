@@ -130,6 +130,14 @@ func appVersion(short: Bool = false) -> String {
     }
 }
 
+func settingsVersion(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) -> String {
+    let version = infoDictionary["CFBundleShortVersionString"] as? String ?? "-"
+    guard let commit = infoDictionary["GitCommit"] as? String, !commit.isEmpty else {
+        return version
+    }
+    return "\(version) (\(commit))"
+}
+
 
 // MARK: - Login Item Management
 

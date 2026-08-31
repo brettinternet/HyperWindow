@@ -265,7 +265,7 @@ extension PreferencesController: NSWindowDelegate {
             ? "Resizing will act on the window corner nearest to the cursor."
             : "Resizing will act on the lower right corner of the window."
 
-        versionLabel?.stringValue = appVersion(short: true)
+        versionLabel?.stringValue = settingsVersion()
     }
 
     private func resizeSettingsWindow(contentHeight: CGFloat) {
