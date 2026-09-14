@@ -35,4 +35,15 @@ final class DefaultsTests: XCTestCase {
 
         XCTAssertFalse(defaults.bool(forKey: DefaultsKeys.showMenuIcon.rawValue))
     }
+
+    func test_toggle_default_bool_flips_and_persists_value() {
+        let defaults = testUserDefaults()
+        defaults.set(true, forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
+
+        XCTAssertFalse(toggleDefaultBool(for: .resizeFromNearestCorner, defaults: defaults))
+        XCTAssertFalse(defaults.bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue))
+
+        XCTAssertTrue(toggleDefaultBool(for: .resizeFromNearestCorner, defaults: defaults))
+        XCTAssertTrue(defaults.bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue))
+    }
 }

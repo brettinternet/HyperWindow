@@ -94,24 +94,12 @@ class PreferencesController: NSWindowController {
     }
 
     @IBAction func resizeFromNearestCornerClicked(_ sender: Any) {
-        let value: NSNumber = {
-            var v = Current.defaults().bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
-            v.toggle()
-            return NSNumber(booleanLiteral: v)
-        }()
-        Current.defaults().set(value, forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
+        _ = toggleDefaultBool(for: .resizeFromNearestCorner)
         updateCopy()
     }
 
     @IBAction func hideMenuIconClicked(_ sender: Any) {
-        let value: NSNumber = {
-            var v = Current.defaults().bool(forKey:
-                DefaultsKeys.showMenuIcon.rawValue)
-            v.toggle()
-            return NSNumber(booleanLiteral: v)
-        }()
-        Current.defaults().set(value, forKey:
-            DefaultsKeys.showMenuIcon.rawValue)
+        _ = toggleDefaultBool(for: .showMenuIcon)
         updateCopy()
         (NSApp.delegate as? AppDelegate)?.updateStatusItemVisibility()
     }
@@ -129,19 +117,13 @@ class PreferencesController: NSWindowController {
     }
     
     @IBAction func requireDragToActivateClicked(_ sender: Any) {
-        let value: NSNumber = {
-            var v = Current.defaults().bool(forKey: DefaultsKeys.requireDragToActivate.rawValue)
-            v.toggle()
-            return NSNumber(booleanLiteral: v)
-        }()
-        Current.defaults().set(value, forKey: DefaultsKeys.requireDragToActivate.rawValue)
+        _ = toggleDefaultBool(for: .requireDragToActivate)
         Tracker.shared?.readModifiers()  // Update the tracker with new setting
         updateCopy()
     }
 
     @IBAction func focusWindowOnManipulationClicked(_ sender: Any) {
-        let key = DefaultsKeys.focusWindowOnManipulation.rawValue
-        Current.defaults().set(!Current.defaults().bool(forKey: key), forKey: key)
+        _ = toggleDefaultBool(for: .focusWindowOnManipulation)
         Tracker.shared?.readModifiers()
         updateFocusWindowPreferenceState()
     }

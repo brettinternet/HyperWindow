@@ -27,6 +27,12 @@ func registerDefaultPreferences(in defaults: UserDefaults = Current.defaults()) 
     defaults.register(defaults: DefaultPreferences)
 }
 
+func toggleDefaultBool(for key: DefaultsKeys, defaults: UserDefaults = Current.defaults()) -> Bool {
+    let updatedValue = !defaults.bool(forKey: key.rawValue)
+    defaults.set(updatedValue, forKey: key.rawValue)
+    return updatedValue
+}
+
 
 protocol Defaultable {
     init?(forKey: DefaultsKeys, defaults: UserDefaults)
