@@ -30,11 +30,13 @@ class PreferencesController: NSWindowController {
     var openSystemSettingsButton: NSButton!
     var githubLink: NSButton!
 
+    private static let contentWidth: CGFloat = 390
+
     private var rootStack: NSStackView!
 
     override func loadWindow() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 430),
+            contentRect: NSRect(x: 0, y: 0, width: Self.contentWidth, height: 430),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -130,12 +132,11 @@ class PreferencesController: NSWindowController {
             focusWindowOnManipulation
         ], spacing: 7)
 
-        let settingsGrid = NSGridView(views: [
-            [shortcutGrid, generalStack]
-        ])
-        settingsGrid.columnSpacing = 44
-        settingsGrid.xPlacement = .leading
-        settingsGrid.yPlacement = .top
+        let settingsStack = NSStackView(views: [shortcutGrid, generalStack])
+        settingsStack.orientation = .horizontal
+        settingsStack.alignment = .top
+        settingsStack.spacing = 44
+        settingsStack.setHuggingPriority(.required, for: .horizontal)
 
         let permissionStack = verticalStack([
             accessibilityStatusLabel,
@@ -153,7 +154,7 @@ class PreferencesController: NSWindowController {
         separator.boxType = .separator
 
         rootStack = verticalStack([
-            settingsGrid,
+            settingsStack,
             resizeInfoLabel,
             modifierConflictLabel,
             permissionStack,
@@ -171,7 +172,7 @@ class PreferencesController: NSWindowController {
             separator.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             footer.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             resizeInfoLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            contentView.widthAnchor.constraint(equalToConstant: 520)
+            contentView.widthAnchor.constraint(equalToConstant: Self.contentWidth)
         ])
     }
 
@@ -350,15 +351,6 @@ class PreferencesController: NSWindowController {
 }
 
 extension PreferencesController: NSWindowDelegate {
-    func windowDidChangeOcclusionState(_ notification: Notification) {
-        updateModifierButtonStates()
-        updatePreferenceButtonStates()
-        updateLaunchAtLoginState()
-        updateAccessibilityStatus()
-        updateCopy()
-        updateModifierConflictStatus()
-    }
-
     private func updatePreferenceButtonStates() {
         resizeFromNearestCorner?.state = Current.defaults().bool(
             forKey: DefaultsKeys.resizeFromNearestCorner.rawValue
@@ -420,12 +412,16 @@ extension PreferencesController: NSWindowDelegate {
     private func resizeSettingsWindow() {
         guard let window, let contentView = window.contentView, let rootStack else { return }
         contentView.layoutSubtreeIfNeeded()
-        let contentHeight = rootStack.fittingSize.height + 40
-        guard abs(contentView.frame.height - contentHeight) > 0.5 else { return }
+        let targetContentSize = NSSize(
+            width: Self.contentWidth,
+            height: rootStack.fittingSize.height + 40
+        )
+        guard abs(contentView.frame.width - targetContentSize.width) > 0.5
+                || abs(contentView.frame.height - targetContentSize.height) > 0.5 else { return }
 
         let currentFrame = window.frame
         let targetFrame = window.frameRect(
-            forContentRect: NSRect(x: 0, y: 0, width: 520, height: contentHeight)
+            forContentRect: NSRect(origin: .zero, size: targetContentSize)
         )
         window.setFrame(
             NSRect(

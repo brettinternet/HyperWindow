@@ -9,8 +9,10 @@ final class PreferencesControllerTests: XCTestCase {
         _ = controller.window
 
         controller.updateAccessibilityStatus(trusted: false)
-        let expandedHeight = try XCTUnwrap(controller.window?.contentView?.frame.height)
+        let expandedSize = try XCTUnwrap(controller.window?.contentView?.frame.size)
+        let expandedHeight = expandedSize.height
         let expandedTopEdge = try XCTUnwrap(controller.window).frame.maxY
+        XCTAssertEqual(expandedSize.width, 390)
         XCTAssertFalse(controller.accessibilityStatusLabel.isHidden)
         XCTAssertFalse(controller.openSystemSettingsButton.isHidden)
         XCTAssertLessThanOrEqual(
@@ -21,6 +23,7 @@ final class PreferencesControllerTests: XCTestCase {
         controller.updateAccessibilityStatus(trusted: true)
         let collapsedHeight = try XCTUnwrap(controller.window?.contentView?.frame.height)
         XCTAssertLessThan(collapsedHeight, expandedHeight)
+        XCTAssertEqual(controller.window?.contentView?.frame.width, 390)
         XCTAssertEqual(controller.window?.frame.maxY, expandedTopEdge)
         XCTAssertTrue(controller.accessibilityStatusLabel.isHidden)
         XCTAssertTrue(controller.openSystemSettingsButton.isHidden)
@@ -147,8 +150,10 @@ final class PreferencesControllerTests: XCTestCase {
             XCTUnwrap(controller.requireDragToActivate),
             XCTUnwrap(controller.focusWindowOnManipulation)
         ]
+        XCTAssertEqual(contentView.frame.width, 390)
         XCTAssertTrue(controls.allSatisfy { !$0.translatesAutoresizingMaskIntoConstraints })
         XCTAssertTrue(controls.allSatisfy { contentView.convert($0.bounds, from: $0).width > 0 })
+        XCTAssertTrue(controls.allSatisfy { contentView.convert($0.bounds, from: $0).maxX <= contentView.bounds.maxX })
     }
 
     func testSettingsVersionIncludesCommitForUntaggedBuild() {
