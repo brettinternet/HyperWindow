@@ -5,11 +5,11 @@ import XCTest
 @MainActor
 final class PreferencesControllerTests: XCTestCase {
     func testAccessibilityStatusOnlyReservesSpaceWhenPermissionIsMissing() throws {
-        let controller = PreferencesController(windowNibName: "PreferencesController")
-        controller.loadWindow()
+        let controller = PreferencesController(windowNibName: "ProgrammaticPreferences")
+        _ = controller.window
 
         controller.updateAccessibilityStatus(trusted: false)
-        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 308))
+        let expandedHeight = try XCTUnwrap(controller.window?.contentView?.frame.height)
         let expandedTopEdge = try XCTUnwrap(controller.window).frame.maxY
         XCTAssertFalse(controller.accessibilityStatusLabel.isHidden)
         XCTAssertFalse(controller.openSystemSettingsButton.isHidden)
@@ -19,7 +19,8 @@ final class PreferencesControllerTests: XCTestCase {
         )
 
         controller.updateAccessibilityStatus(trusted: true)
-        XCTAssertEqual(controller.window?.contentView?.frame.size, NSSize(width: 390, height: 256))
+        let collapsedHeight = try XCTUnwrap(controller.window?.contentView?.frame.height)
+        XCTAssertLessThan(collapsedHeight, expandedHeight)
         XCTAssertEqual(controller.window?.frame.maxY, expandedTopEdge)
         XCTAssertTrue(controller.accessibilityStatusLabel.isHidden)
         XCTAssertTrue(controller.openSystemSettingsButton.isHidden)
@@ -67,6 +68,48 @@ final class PreferencesControllerTests: XCTestCase {
         XCTAssertEqual(updated, [.fn])
     }
 
+    func testPersistedPreferenceStatesAppearWhenWindowLoads() throws {
+        let defaults = testUserDefaults()
+        registerDefaultPreferences(in: defaults)
+        defaults.set(true, forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
+        defaults.set(false, forKey: DefaultsKeys.showMenuIcon.rawValue)
+        defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
+        defaults.set(true, forKey: DefaultsKeys.focusWindowOnManipulation.rawValue)
+
+        let originalDefaults = Current.defaults
+        Current.defaults = { defaults }
+        defer { Current.defaults = originalDefaults }
+
+        let controller = PreferencesController(windowNibName: "ProgrammaticPreferences")
+        _ = controller.window
+
+        XCTAssertTrue(controller.window?.delegate === controller)
+        XCTAssertEqual(controller.resizeFromNearestCorner.state, .on)
+        XCTAssertEqual(controller.showMenuIcon.state, .off)
+        XCTAssertEqual(controller.requireDragToActivate.state, .on)
+        XCTAssertEqual(controller.focusWindowOnManipulation.state, .on)
+    }
+
+    func testModifierConflictExpandsWindowImmediately() throws {
+        let defaults = testUserDefaults()
+        registerDefaultPreferences(in: defaults)
+        try Modifiers<Move>([.control, .fn]).save(forKey: .moveModifiers, defaults: defaults)
+        try Modifiers<Resize>([.control]).save(forKey: .resizeModifiers, defaults: defaults)
+
+        let originalDefaults = Current.defaults
+        Current.defaults = { defaults }
+        defer { Current.defaults = originalDefaults }
+
+        let controller = PreferencesController(windowNibName: "ProgrammaticPreferences")
+        _ = controller.window
+        let initialHeight = try XCTUnwrap(controller.window?.contentView?.frame.height)
+
+        controller.modifierClicked(controller.resizeFn)
+
+        XCTAssertFalse(controller.modifierConflictLabel.isHidden)
+        XCTAssertGreaterThan(try XCTUnwrap(controller.window?.contentView?.frame.height), initialHeight)
+    }
+
     func testFocusWindowPreferenceCanBeEnabledAndDisabled() {
         let defaults = testUserDefaults()
         registerDefaultPreferences(in: defaults)
@@ -87,33 +130,25 @@ final class PreferencesControllerTests: XCTestCase {
         XCTAssertEqual(focusButton.state, .off)
     }
 
-    func testGeneralCheckboxRowsAlignWithShortcutRows() throws {
-        let controller = PreferencesController(windowNibName: "PreferencesController")
-        controller.loadWindow()
+    func testSettingsUseConstraintBasedLayout() throws {
+        let controller = PreferencesController(windowNibName: "ProgrammaticPreferences")
+        _ = controller.window
         controller.updateAccessibilityStatus(trusted: false)
 
         let contentView = try XCTUnwrap(controller.window?.contentView)
-        let moveTop = try XCTUnwrap(controller.moveAlt)
-        let resizeTop = try XCTUnwrap(controller.resizeAlt)
-        let moveTopY = contentView.convert(moveTop.bounds, from: moveTop).minY
-        let resizeTopY = contentView.convert(resizeTop.bounds, from: resizeTop).minY
+        contentView.layoutSubtreeIfNeeded()
 
-        let generalRows = try [
+        let controls = try [
+            XCTUnwrap(controller.moveAlt),
+            XCTUnwrap(controller.resizeAlt),
             XCTUnwrap(controller.resizeFromNearestCorner),
             XCTUnwrap(controller.showMenuIcon),
             XCTUnwrap(controller.launchAtLogin),
             XCTUnwrap(controller.requireDragToActivate),
             XCTUnwrap(controller.focusWindowOnManipulation)
         ]
-        let generalRowYs = generalRows.map {
-            contentView.convert($0.bounds, from: $0).minY
-        }
-        XCTAssertEqual(moveTopY, generalRowYs[0], accuracy: 0.001)
-        XCTAssertEqual(resizeTopY, generalRowYs[0], accuracy: 0.001)
-        XCTAssertEqual(
-            zip(generalRowYs, generalRowYs.dropFirst()).map { $0.0 - $0.1 },
-            [26, 25, 25, 26]
-        )
+        XCTAssertTrue(controls.allSatisfy { !$0.translatesAutoresizingMaskIntoConstraints })
+        XCTAssertTrue(controls.allSatisfy { contentView.convert($0.bounds, from: $0).width > 0 })
     }
 
     func testSettingsVersionIncludesCommitForUntaggedBuild() {

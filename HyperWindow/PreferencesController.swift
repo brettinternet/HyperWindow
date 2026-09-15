@@ -4,47 +4,211 @@ import ServiceManagement
 
 class PreferencesController: NSWindowController {
 
-    @IBOutlet weak var moveAlt: NSButton!
-    @IBOutlet weak var moveCommand: NSButton!
-    @IBOutlet weak var moveControl: NSButton!
-    @IBOutlet weak var moveFn: NSButton!
-    @IBOutlet weak var moveShift: NSButton!
+    var moveAlt: NSButton!
+    var moveCommand: NSButton!
+    var moveControl: NSButton!
+    var moveFn: NSButton!
+    var moveShift: NSButton!
 
-    @IBOutlet weak var resizeAlt: NSButton!
-    @IBOutlet weak var resizeCommand: NSButton!
-    @IBOutlet weak var resizeControl: NSButton!
-    @IBOutlet weak var resizeFn: NSButton!
-    @IBOutlet weak var resizeShift: NSButton!
+    var resizeAlt: NSButton!
+    var resizeCommand: NSButton!
+    var resizeControl: NSButton!
+    var resizeFn: NSButton!
+    var resizeShift: NSButton!
 
-    @IBOutlet weak var resizeFromNearestCorner: NSButton!
-    @IBOutlet weak var resizeInfoLabel: NSTextField!
-    @IBOutlet weak var modifierConflictLabel: NSTextField!
+    var resizeFromNearestCorner: NSButton!
+    var resizeInfoLabel: NSTextField!
+    var modifierConflictLabel: NSTextField!
 
-    @IBOutlet weak var showMenuIcon: NSButton!
-    @IBOutlet weak var launchAtLogin: NSButton!
-    @IBOutlet weak var requireDragToActivate: NSButton!
-    @IBOutlet weak var focusWindowOnManipulation: NSButton!
+    var showMenuIcon: NSButton!
+    var launchAtLogin: NSButton!
+    var requireDragToActivate: NSButton!
+    var focusWindowOnManipulation: NSButton!
 
-    @IBOutlet weak var versionLabel: NSTextField!
-    @IBOutlet weak var accessibilityStatusLabel: NSTextField!
-    @IBOutlet weak var openSystemSettingsButton: NSButton!
-    @IBOutlet weak var githubLink: NSButton!
-    
+    var versionLabel: NSTextField!
+    var accessibilityStatusLabel: NSTextField!
+    var openSystemSettingsButton: NSButton!
+    var githubLink: NSButton!
+
+    private var rootStack: NSStackView!
+
+    override func loadWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 430),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "HyperWindow Settings"
+        window.identifier = NSUserInterfaceItemIdentifier("HyperWindowSettings")
+        window.isReleasedWhenClosed = false
+        window.isRestorable = true
+        window.autorecalculatesKeyViewLoop = true
+        window.delegate = self
+        window.center()
+        window.setFrameAutosaveName("HyperWindowSettings")
+        self.window = window
+        buildSettingsView()
+    }
+
     override func windowDidLoad() {
         super.windowDidLoad()
         updateModifierButtonStates()
-        updateFocusWindowPreferenceState()
+        updatePreferenceButtonStates()
         updateAccessibilityStatus()
         updateLaunchAtLoginState()
         updateCopy()
         updateModifierConflictStatus()
         setupGitHubLink()
+        resizeSettingsWindow()
+    }
+
+    private func buildSettingsView() {
+        guard let contentView = window?.contentView else { return }
+
+        moveAlt = modifierButton("⌥")
+        moveCommand = modifierButton("⌘")
+        moveControl = modifierButton("⌃")
+        moveFn = modifierButton("fn")
+        moveShift = modifierButton("⇧")
+        resizeAlt = modifierButton("⌥")
+        resizeCommand = modifierButton("⌘")
+        resizeControl = modifierButton("⌃")
+        resizeFn = modifierButton("fn")
+        resizeShift = modifierButton("⇧")
+
+        resizeFromNearestCorner = checkbox("Resize from corners", action: #selector(resizeFromNearestCornerClicked(_:)))
+        resizeFromNearestCorner.toolTip = "Resize windows from the corner nearest to the pointer."
+        showMenuIcon = checkbox("Show menu icon", action: #selector(hideMenuIconClicked(_:)))
+        showMenuIcon.toolTip = "Show HyperWindow in the menu bar."
+        launchAtLogin = checkbox("Launch at login", action: #selector(launchAtLoginClicked(_:)))
+        launchAtLogin.toolTip = "Start HyperWindow automatically when you log in."
+        requireDragToActivate = checkbox("Require mouse drag", action: #selector(requireDragToActivateClicked(_:)))
+        requireDragToActivate.toolTip = "Only move or resize while dragging the mouse."
+        focusWindowOnManipulation = checkbox("Focus moved windows", action: #selector(focusWindowOnManipulationClicked(_:)))
+        focusWindowOnManipulation.toolTip = "Bring a window into focus when moving or resizing it."
+
+        resizeInfoLabel = secondaryLabel("")
+        resizeInfoLabel.maximumNumberOfLines = 2
+        modifierConflictLabel = secondaryLabel("Move and Resize modifiers must differ.")
+        modifierConflictLabel.textColor = .systemRed
+        modifierConflictLabel.isHidden = true
+
+        accessibilityStatusLabel = secondaryLabel("Accessibility permission is required")
+        accessibilityStatusLabel.textColor = .systemOrange
+        openSystemSettingsButton = NSButton(
+            title: "Grant Accessibility Access",
+            target: self,
+            action: #selector(openSystemSettingsClicked(_:))
+        )
+        openSystemSettingsButton.bezelStyle = .rounded
+
+        versionLabel = secondaryLabel("")
+        versionLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        githubLink = NSButton(title: "View on GitHub", target: self, action: #selector(githubLinkClicked(_:)))
+        let quitButton = NSButton(title: "Quit", target: self, action: #selector(quitClicked(_:)))
+        quitButton.bezelStyle = .rounded
+
+        let shortcutGrid = NSGridView(views: [
+            [sectionLabel("Move"), sectionLabel("Resize")],
+            [moveAlt, resizeAlt],
+            [moveCommand, resizeCommand],
+            [moveControl, resizeControl],
+            [moveFn, resizeFn],
+            [moveShift, resizeShift]
+        ])
+        shortcutGrid.rowSpacing = 6
+        shortcutGrid.columnSpacing = 36
+        shortcutGrid.xPlacement = .leading
+
+        let generalStack = verticalStack([
+            sectionLabel("General"),
+            resizeFromNearestCorner,
+            showMenuIcon,
+            launchAtLogin,
+            requireDragToActivate,
+            focusWindowOnManipulation
+        ], spacing: 7)
+
+        let settingsGrid = NSGridView(views: [
+            [shortcutGrid, generalStack]
+        ])
+        settingsGrid.columnSpacing = 44
+        settingsGrid.xPlacement = .leading
+        settingsGrid.yPlacement = .top
+
+        let permissionStack = verticalStack([
+            accessibilityStatusLabel,
+            openSystemSettingsButton
+        ], spacing: 8)
+
+        let footer = NSStackView(views: [versionLabel, githubLink, NSView(), quitButton])
+        footer.orientation = .horizontal
+        footer.alignment = .centerY
+        footer.spacing = 10
+        footer.setHuggingPriority(.defaultLow, for: .horizontal)
+        footer.views[2].setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+
+        rootStack = verticalStack([
+            settingsGrid,
+            resizeInfoLabel,
+            modifierConflictLabel,
+            permissionStack,
+            separator,
+            footer
+        ], spacing: 14)
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(rootStack)
+
+        NSLayoutConstraint.activate([
+            rootStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 22),
+            rootStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 22),
+            rootStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -22),
+            rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18),
+            separator.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            footer.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            resizeInfoLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            contentView.widthAnchor.constraint(equalToConstant: 520)
+        ])
+    }
+
+    private func modifierButton(_ title: String) -> NSButton {
+        checkbox(title, action: #selector(modifierClicked(_:)))
+    }
+
+    private func checkbox(_ title: String, action: Selector) -> NSButton {
+        let button = NSButton(checkboxWithTitle: title, target: self, action: action)
+        button.controlSize = .regular
+        return button
+    }
+
+    private func sectionLabel(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        return label
+    }
+
+    private func secondaryLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.textColor = .secondaryLabelColor
+        return label
+    }
+
+    private func verticalStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
+        let stack = NSStackView(views: views)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = spacing
+        return stack
     }
 
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         updateModifierButtonStates()
-        updateFocusWindowPreferenceState()
+        updatePreferenceButtonStates()
         updateAccessibilityStatus()
         updateLaunchAtLoginState()
         updateCopy()
@@ -71,6 +235,7 @@ class PreferencesController: NSWindowController {
                     sender.state = modifiers.contains(m) ? .on : .off
                     modifierConflictLabel?.isHidden = false
                     modifierConflictLabel?.stringValue = "Move and Resize modifiers must differ."
+                    resizeSettingsWindow()
                     return
                 }
                 try? updated.save(forKey: .moveModifiers, defaults: Current.defaults())
@@ -83,6 +248,7 @@ class PreferencesController: NSWindowController {
                     sender.state = modifiers.contains(m) ? .on : .off
                     modifierConflictLabel?.isHidden = false
                     modifierConflictLabel?.stringValue = "Move and Resize modifiers must differ."
+                    resizeSettingsWindow()
                     return
                 }
                 try? updated.save(forKey: .resizeModifiers, defaults: Current.defaults())
@@ -186,22 +352,24 @@ class PreferencesController: NSWindowController {
 extension PreferencesController: NSWindowDelegate {
     func windowDidChangeOcclusionState(_ notification: Notification) {
         updateModifierButtonStates()
-
-        resizeFromNearestCorner?.state = Current.defaults().bool(forKey: DefaultsKeys.resizeFromNearestCorner.rawValue)
-            ? .on : .off
-
-        showMenuIcon?.state = Current.defaults().bool(forKey: DefaultsKeys.showMenuIcon.rawValue)
-            ? .on : .off
-
+        updatePreferenceButtonStates()
         updateLaunchAtLoginState()
-
-        requireDragToActivate?.state = Current.defaults().bool(forKey: DefaultsKeys.requireDragToActivate.rawValue)
-            ? .on : .off
-        updateFocusWindowPreferenceState()
-
         updateAccessibilityStatus()
         updateCopy()
         updateModifierConflictStatus()
+    }
+
+    private func updatePreferenceButtonStates() {
+        resizeFromNearestCorner?.state = Current.defaults().bool(
+            forKey: DefaultsKeys.resizeFromNearestCorner.rawValue
+        ) ? .on : .off
+        showMenuIcon?.state = Current.defaults().bool(
+            forKey: DefaultsKeys.showMenuIcon.rawValue
+        ) ? .on : .off
+        requireDragToActivate?.state = Current.defaults().bool(
+            forKey: DefaultsKeys.requireDragToActivate.rawValue
+        ) ? .on : .off
+        updateFocusWindowPreferenceState()
     }
 
     func updateModifierButtonStates() {
@@ -220,24 +388,6 @@ extension PreferencesController: NSWindowDelegate {
         }
     }
 
-    private func alignGeneralCheckboxRows() {
-        guard let contentView = window?.contentView,
-              let moveAlt,
-              let resizeFromNearestCorner else { return }
-
-        let shortcutTop = contentView.convert(moveAlt.bounds, from: moveAlt).minY
-        let offset = shortcutTop - resizeFromNearestCorner.frame.minY
-        for button in [
-            resizeFromNearestCorner,
-            showMenuIcon,
-            launchAtLogin,
-            requireDragToActivate,
-            focusWindowOnManipulation
-        ] {
-            button?.frame.origin.y += offset
-        }
-    }
-
     private func updateFocusWindowPreferenceState() {
         focusWindowOnManipulation?.state = Current.defaults().bool(
             forKey: DefaultsKeys.focusWindowOnManipulation.rawValue
@@ -252,12 +402,11 @@ extension PreferencesController: NSWindowDelegate {
             openSystemSettingsButton?.isHidden = true
         } else {
             accessibilityStatusLabel?.isHidden = false
-            accessibilityStatusLabel?.stringValue = "⚠️ Accessibility permission is required"
+            accessibilityStatusLabel?.stringValue = "Accessibility permission is required"
             accessibilityStatusLabel?.textColor = NSColor.systemOrange
             openSystemSettingsButton?.isHidden = false
         }
-        resizeSettingsWindow(contentHeight: isEnabled ? 256 : 308)
-        alignGeneralCheckboxRows()
+        resizeSettingsWindow()
     }
     
     func updateCopy() {
@@ -268,21 +417,23 @@ extension PreferencesController: NSWindowDelegate {
         versionLabel?.stringValue = settingsVersion()
     }
 
-    private func resizeSettingsWindow(contentHeight: CGFloat) {
-        guard let window else { return }
-        let contentSize = NSSize(width: 390, height: contentHeight)
-        guard window.contentView?.frame.size != contentSize else { return }
+    private func resizeSettingsWindow() {
+        guard let window, let contentView = window.contentView, let rootStack else { return }
+        contentView.layoutSubtreeIfNeeded()
+        let contentHeight = rootStack.fittingSize.height + 40
+        guard abs(contentView.frame.height - contentHeight) > 0.5 else { return }
 
         let currentFrame = window.frame
         let targetFrame = window.frameRect(
-            forContentRect: NSRect(origin: .zero, size: contentSize)
-        )
-        let origin = NSPoint(
-            x: currentFrame.minX,
-            y: currentFrame.maxY - targetFrame.height
+            forContentRect: NSRect(x: 0, y: 0, width: 520, height: contentHeight)
         )
         window.setFrame(
-            NSRect(origin: origin, size: targetFrame.size),
+            NSRect(
+                x: currentFrame.minX,
+                y: currentFrame.maxY - targetFrame.height,
+                width: targetFrame.width,
+                height: targetFrame.height
+            ),
             display: window.isVisible
         )
     }
@@ -295,6 +446,7 @@ extension PreferencesController: NSWindowDelegate {
         if hasConflict {
             modifierConflictLabel?.stringValue = "Move and Resize modifiers must differ."
         }
+        resizeSettingsWindow()
     }
 
     private func updateLaunchAtLoginState() {

@@ -80,9 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var loadedPreferencesController: PreferencesController?
     lazy var preferencesController: PreferencesController = {
-        let c = PreferencesController(windowNibName: "PreferencesController")
-        loadedPreferencesController = c
-        return c
+        let controller = PreferencesController(windowNibName: "ProgrammaticPreferences")
+        loadedPreferencesController = controller
+        return controller
     }()
 
     var stateMachine = AppStateMachine()
@@ -159,7 +159,7 @@ extension AppDelegate: NSMenuDelegate {
             versionMenuItem?.isHidden = !hidden
         }
         accessibilityStatusMenuItem?.isHidden = Self.shouldHidePermissionStatusMenuItem(isTrusted: lastPermissionState)
-        accessibilityStatusMenuItem?.title = "⚠️ Accessibility permission required"
+        accessibilityStatusMenuItem?.title = "Accessibility permission required"
         updateStatusPresentation(trusted: lastPermissionState)
     }
 }
@@ -168,6 +168,7 @@ extension AppDelegate: NSMenuDelegate {
 
 extension AppDelegate {
     func addStatusItemToMenubar() {
+        configureStatusMenuImages()
         statusItem = {
             let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             statusItem.menu = statusMenu
@@ -177,6 +178,24 @@ extension AppDelegate {
         }()
         statusMenu?.autoenablesItems = false
         versionMenuItem?.title = "Version: \(appVersion())"
+    }
+
+    private func configureStatusMenuImages() {
+        accessibilityStatusMenuItem?.image = NSImage(
+            systemSymbolName: "exclamationmark.triangle.fill",
+            accessibilityDescription: "Accessibility permission required"
+        )
+        let symbols = [
+            "Help...": "questionmark.circle",
+            "Settings…": "gearshape",
+            "Quit": "power"
+        ]
+        for (title, symbolName) in symbols {
+            statusMenu?.item(withTitle: title)?.image = NSImage(
+                systemSymbolName: symbolName,
+                accessibilityDescription: title
+            )
+        }
     }
 
     func removeStatusItemFromMenubar() {
