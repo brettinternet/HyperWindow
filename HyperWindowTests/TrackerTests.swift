@@ -185,7 +185,7 @@ final class TrackerTests: XCTestCase {
         ))
     }
 
-    func testSyntheticMouseMovedPostsOnlyForAbsorbedActiveDragAndPassesThroughTap() throws {
+    func testSyntheticMouseMovedReplacesAbsorbedPointerMovementAndPassesThroughTap() throws {
         var postedEvents: [CGEvent] = []
         let tracker = try makeTracker(
             window: FakeWindow(),
@@ -202,23 +202,29 @@ final class TrackerTests: XCTestCase {
             event(flags: .maskAlternate, location: CGPoint(x: 10, y: 10)),
             type: .mouseMoved
         ))
-        XCTAssertTrue(postedEvents.isEmpty)
-
-        XCTAssertTrue(tracker.handleEvent(
-            event(flags: .maskAlternate, location: CGPoint(x: 20, y: 25)),
-            type: .leftMouseDragged
-        ))
         XCTAssertEqual(postedEvents.count, 1)
-        XCTAssertEqual(postedEvents[0].location, CGPoint(x: 20, y: 25))
+        XCTAssertEqual(postedEvents[0].location, CGPoint(x: 10, y: 10))
         XCTAssertTrue(postedEvents[0].flags.contains(.maskAlternate))
 
         XCTAssertFalse(tracker.handleEvent(postedEvents[0], type: .mouseMoved))
         XCTAssertEqual(postedEvents.count, 1)
 
         XCTAssertTrue(tracker.handleEvent(
+            event(flags: .maskAlternate, location: CGPoint(x: 20, y: 25)),
+            type: .leftMouseDragged
+        ))
+        XCTAssertEqual(postedEvents.count, 2)
+        XCTAssertEqual(postedEvents[1].location, CGPoint(x: 20, y: 25))
+        XCTAssertTrue(postedEvents[1].flags.contains(.maskAlternate))
+
+        XCTAssertFalse(tracker.handleEvent(postedEvents[1], type: .mouseMoved))
+        XCTAssertEqual(postedEvents.count, 2)
+
+        XCTAssertTrue(tracker.handleEvent(
             event(flags: [], location: CGPoint(x: 20, y: 25)),
             type: .mouseMoved
         ))
+        XCTAssertEqual(postedEvents.count, 3)
         defaults.set(true, forKey: DefaultsKeys.requireDragToActivate.rawValue)
         tracker.readModifiers()
 
@@ -230,15 +236,15 @@ final class TrackerTests: XCTestCase {
             event(flags: .maskAlternate, location: CGPoint(x: 30, y: 35)),
             type: .leftMouseDragged
         ))
-        XCTAssertEqual(postedEvents.count, 2)
-        XCTAssertFalse(tracker.handleEvent(postedEvents[1], type: .mouseMoved))
-        XCTAssertEqual(postedEvents.count, 2)
+        XCTAssertEqual(postedEvents.count, 4)
+        XCTAssertFalse(tracker.handleEvent(postedEvents[3], type: .mouseMoved))
+        XCTAssertEqual(postedEvents.count, 4)
 
         XCTAssertFalse(tracker.handleEvent(
             event(flags: [], location: CGPoint(x: 30, y: 35)),
             type: .leftMouseUp
         ))
-        XCTAssertEqual(postedEvents.count, 2)
+        XCTAssertEqual(postedEvents.count, 4)
     }
 
     func testNonSettableWindowDoesNotConsumeActivation() throws {

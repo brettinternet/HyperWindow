@@ -364,8 +364,10 @@ class Tracker {
 
         func absorbActiveEvent(_ handled: Bool) -> Bool {
             guard !isFlagsChangedEvent else { return false }
-            guard handled, isDragEvent else { return handled }
-            postSyntheticMouseMoved(for: event, proxy: proxy)
+            guard handled else { return false }
+            if isMoveEvent || isDragEvent {
+                postSyntheticMouseMoved(for: event, proxy: proxy)
+            }
             return true
         }
         if requireDragToActivate,
