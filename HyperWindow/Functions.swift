@@ -120,14 +120,14 @@ func isTrusted(prompt: Bool) -> Bool {
 }
 
 
+func formattedVersion(shortVersion: String, bundleVersion: String, short: Bool = false) -> String {
+    short ? shortVersion : "\(shortVersion) (\(bundleVersion))"
+}
+
 func appVersion(short: Bool = false) -> String {
     let shortVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
-    if short {
-        return shortVersion
-    } else {
-        let bundleVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
-        return "\(shortVersion) (\(bundleVersion))"
-    }
+    let bundleVersion = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
+    return formattedVersion(shortVersion: shortVersion, bundleVersion: bundleVersion, short: short)
 }
 
 func settingsVersion(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) -> String {

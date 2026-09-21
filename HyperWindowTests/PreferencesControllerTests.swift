@@ -156,6 +156,11 @@ final class PreferencesControllerTests: XCTestCase {
         XCTAssertTrue(controls.allSatisfy { contentView.convert($0.bounds, from: $0).maxX <= contentView.bounds.maxX })
     }
 
+    func testFormattedVersionFormatsShortAndFullVersions() {
+        XCTAssertEqual(formattedVersion(shortVersion: "1.2.3", bundleVersion: "42", short: true), "1.2.3")
+        XCTAssertEqual(formattedVersion(shortVersion: "1.2.3", bundleVersion: "42"), "1.2.3 (42)")
+    }
+
     func testSettingsVersionIncludesCommitForUntaggedBuild() {
         let version = settingsVersion(infoDictionary: [
             "CFBundleShortVersionString": "1.2.3",
