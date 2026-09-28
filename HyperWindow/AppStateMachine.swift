@@ -95,7 +95,7 @@ extension AppStateMachine: StateMachineDelegate {
             case (.launching, .validatingState):
                 checkState()
             case (.validatingState, .activating), (.deactivated, .activating):
-                activate(showAlert: !suppressActivationAlerts, keepTrying: true)
+                activate(showAlert: !suppressActivationAlerts)
             default:
                 break
         }
@@ -111,7 +111,7 @@ extension AppStateMachine {
         stateMachine.state = .activating
     }
 
-    func activate(showAlert: Bool, keepTrying: Bool) {
+    func activate(showAlert: Bool) {
         guard isTrusted(prompt: false) else {
             if showAlert {
                 showAccessibilityAlert()
