@@ -13,14 +13,9 @@ class AppStateMachineTests: XCTestCase {
 
 class AppDelegateLaunchTests: XCTestCase {
 
-    func test_manual_launch_presents_settings_but_login_launch_stays_silent() {
-        XCTAssertTrue(AppDelegate.shouldPresentSettings(launchedAsLoginItem: false))
-        XCTAssertFalse(AppDelegate.shouldPresentSettings(launchedAsLoginItem: true))
-    }
-
-    func test_login_launch_suppresses_permission_alerts() {
-        XCTAssertTrue(AppDelegate.shouldPresentPermissionAlert(launchedAsLoginItem: false))
-        XCTAssertFalse(AppDelegate.shouldPresentPermissionAlert(launchedAsLoginItem: true))
+    func test_login_launch_is_not_a_manual_launch() {
+        XCTAssertTrue(AppDelegate.isManualLaunch(launchedAsLoginItem: false))
+        XCTAssertFalse(AppDelegate.isManualLaunch(launchedAsLoginItem: true))
     }
 
     func test_statusPresentationRequires_tracker_permission_and_activated_state() {
