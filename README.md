@@ -22,7 +22,7 @@ defaults write -g NSWindowShouldDragOnGesture -bool true
 
 ## Releases
 
-Releases are [built, Developer ID signed, and notarized by a GitHub Action](https://github.com/brettinternet/HyperWindow/actions). Download the DMG from [GitHub releases](https://github.com/brettinternet/HyperWindow/releases) and drag HyperWindow to Applications.
+Download my signed and notarized releases from [GitHub releases](https://github.com/brettinternet/HyperWindow/releases).
 
 ### Build
 
