@@ -20,7 +20,7 @@ final class TrackerTests: XCTestCase {
 
     override func tearDown() {
         Tracker.disable()
-        Current.defaults = { UserDefaults(suiteName: "cloud.brett.HyperWindow.prefs") ?? .standard }
+        Current.defaults = Environment().defaults
         super.tearDown()
     }
 
