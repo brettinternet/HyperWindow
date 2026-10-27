@@ -47,6 +47,8 @@ git push origin v0.0.10
 
 Tags matching `vMAJOR.MINOR.PATCH` (optionally `-alpha.N`, `-beta.N`, or `-rc.N`) run tests, build the universal app, sign and notarize a DMG, and publish it with a checksum as a GitHub release. Signing credentials live in the `release` environment, which only `v*` tags can use. Prerelease tags create prerelease GitHub releases.
 
+To rotate signing credentials, export a new Developer ID Application certificate as a `.p12` or create a new App Store Connect team key, then replace the matching secret with `gh secret set <NAME> --env release`: `DEVELOPER_ID_P12_BASE64` and `DEVELOPER_ID_P12_PASSWORD`, or `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID`, and `NOTARY_ISSUER_ID`. If a certificate leaks, revoke it in the Apple Developer portal after the replacement is in place.
+
 ## Known Limitations
 
 This app uses the macOS Accessibility APIs in order to discover windows and update their position and size. Some apps such as Telegram and Stream Deck create windows that don't participate in this mechanism and are invisible to this software.
