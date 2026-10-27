@@ -22,10 +22,7 @@ defaults write -g NSWindowShouldDragOnGesture -bool true
 
 ## Releases
 
-> [!NOTE]  
-> I have not elected to sign the app by joining the Apple Developer Program yet. You can create a build yourself, or trust the automated GitHub releases and circumvent Apple's security policy.
-
-The releases are [built and published by a GitHub Action](https://github.com/brettinternet/HyperWindow/actions) and can be installed by bypassing the typical app security on macOS. You're also welcome to build and bundle the app yourself with Xcode. For a signed release, you may install a release from the [original repository](https://github.com/finestructure/Hummingbird) (although some features are missing upstream).
+Releases are [built, Developer ID signed, and notarized by a GitHub Action](https://github.com/brettinternet/HyperWindow/actions). Download the DMG from [GitHub releases](https://github.com/brettinternet/HyperWindow/releases) and drag HyperWindow to Applications.
 
 ### Build
 
@@ -48,15 +45,7 @@ git tag v0.0.10
 git push origin v0.0.10
 ```
 
-Tags matching `vMAJOR.MINOR.PATCH` (optionally `-alpha.N`, `-beta.N`, or `-rc.N`) run tests, build the universal app, create a DMG and checksum, and publish a GitHub release. Prerelease tags create prerelease GitHub releases.
-
-### Unsigned Release
-
-Alternatively, to run the unsigned app, clear the quarantine extended attribute at your own risk.
-
-```
-xattr -dr com.apple.quarantine /Applications/HyperWindow.app
-```
+Tags matching `vMAJOR.MINOR.PATCH` (optionally `-alpha.N`, `-beta.N`, or `-rc.N`) run tests, build the universal app, sign and notarize a DMG, and publish it with a checksum as a GitHub release. Signing credentials live in the `release` environment, which only `v*` tags can use. Prerelease tags create prerelease GitHub releases.
 
 ## Known Limitations
 

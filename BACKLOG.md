@@ -63,6 +63,29 @@ Manual first launch should explain the utility briefly, while background login l
 
 Evidence: launch policy and UI wiring are covered statically and by focused tests. A live installed-build launch presented Settings, the permission warning, and the System Settings fallback correctly; login-item launch plus grant/revoke transitions remain unchecked.
 
+### AR-010 — Sign and notarize public releases
+
+- Status: In progress — awaiting the first signed prerelease
+- Priority: P3
+- Dependencies: AR-008
+
+Developer ID signing and notarization would provide the standard Gatekeeper installation experience for direct downloads.
+
+#### Implementation tasks
+
+- [x] T1 — Decide whether to join the Apple Developer Program for this project.
+- [x] T2 — Store signing and notarization credentials as protected CI secrets.
+- [x] T3 — Sign with Developer ID, submit with `notarytool`, staple the ticket, and verify the distributed DMG.
+
+#### Acceptance criteria
+
+- [ ] AC1 — A downloaded release opens through the standard Gatekeeper flow without quarantine-removal instructions.
+- [ ] AC2 — CI verifies the Developer ID signature, hardened runtime, and notarization ticket.
+
+#### Definition of Done
+
+- [ ] DOD1 — Release and recovery procedures are documented without exposing credentials.
+
 ## Next
 
 ### AR-005 — Apply native Settings and menu polish
@@ -222,31 +245,6 @@ While HyperDock consumes drag events during an active operation, it reposts an e
 #### Definition of Done
 
 - [ ] DOD1 — A `TrackerTests` case asserts the synthetic post occurs only in the active-absorb path (inject the post function through `Tracker.Dependencies` for testability).
-
-## Deferred decision
-
-### AR-010 — Sign and notarize public releases
-
-- Status: Deferred — requires an Apple Developer Program decision
-- Priority: P3
-- Dependencies: AR-008
-
-Developer ID signing and notarization would provide the standard Gatekeeper installation experience for direct downloads.
-
-#### Implementation tasks
-
-- [ ] T1 — Decide whether to join the Apple Developer Program for this project.
-- [ ] T2 — Store signing and notarization credentials as protected CI secrets.
-- [ ] T3 — Sign with Developer ID, submit with `notarytool`, staple the ticket, and verify the distributed DMG.
-
-#### Acceptance criteria
-
-- [ ] AC1 — A downloaded release opens through the standard Gatekeeper flow without quarantine-removal instructions.
-- [ ] AC2 — CI verifies the Developer ID signature, hardened runtime, and notarization ticket.
-
-#### Definition of Done
-
-- [ ] DOD1 — Release and recovery procedures are documented without exposing credentials.
 
 ## Scope guard
 
