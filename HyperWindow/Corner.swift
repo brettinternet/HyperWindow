@@ -21,17 +21,19 @@ enum Corner: CustomStringConvertible, Equatable {
     }
 
     static func corner(for position: CGPoint, in size: CGSize) -> Self {
-        switch (position.x / size.width, position.y / size.height) {
-            case let (x, y) where x < 0.5 && y < 0.5:
+        let x = position.x / size.width
+        let y = position.y / size.height
+        guard !x.isNaN, !y.isNaN else { return .bottomRight }
+
+        switch (x >= 0.5, y >= 0.5) {
+            case (false, false):
                 return .topLeft
-            case let (x, y) where x >= 0.5 && y < 0.5:
+            case (true, false):
                 return .topRight
-            case let (x, y) where x >= 0.5 && y >= 0.5:
+            case (true, true):
                 return .bottomRight
-            case let (x, y) where x < 0.5 && y >= 0.5:
+            case (false, true):
                 return .bottomLeft
-            default:
-                return .bottomRight
         }
     }
 }
