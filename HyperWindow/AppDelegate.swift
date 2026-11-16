@@ -25,11 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibilityValue: String
     }
 
-    static func shouldPresentSettings(launchedAsLoginItem: Bool) -> Bool {
-        !launchedAsLoginItem
-    }
-
-    static func shouldPresentPermissionAlert(launchedAsLoginItem: Bool) -> Bool {
+    static func shouldPresentUI(launchedAsLoginItem: Bool) -> Bool {
         !launchedAsLoginItem
     }
 
@@ -126,7 +122,7 @@ extension AppDelegate {
             stateMachine.suppressActivationAlerts = launchedAsLoginItem
         }
 
-        if Self.shouldPresentSettings(launchedAsLoginItem: launchedAsLoginItem) {
+        if Self.shouldPresentUI(launchedAsLoginItem: launchedAsLoginItem) {
             NSApp.activate(ignoringOtherApps: true)
             preferencesController.showWindow(nil)
         }
@@ -251,13 +247,13 @@ extension AppDelegate {
                 stateMachine.state = .deactivated
                 stateMachine.checkState()
             }
-            if stateMachine.state != .activated && Self.shouldPresentPermissionAlert(launchedAsLoginItem: launchedAsLoginItem) {
+            if stateMachine.state != .activated && Self.shouldPresentUI(launchedAsLoginItem: launchedAsLoginItem) {
                 showRestartPrompt()
             }
         case .revoked:
             log(.error, "Accessibility permissions revoked - immediately deactivating to prevent system crashes")
             stateMachine.deactivate()
-            if Self.shouldPresentPermissionAlert(launchedAsLoginItem: launchedAsLoginItem) {
+            if Self.shouldPresentUI(launchedAsLoginItem: launchedAsLoginItem) {
                 showPermissionRevokedAlert()
             }
         case .unchanged:
