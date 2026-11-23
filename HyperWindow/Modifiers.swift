@@ -52,11 +52,7 @@ func modifierBindingsConflict(move: Modifiers<Move>, resize: Modifiers<Resize>) 
 
 extension Modifiers {
     func toggle(_ modifier: Modifiers) -> Modifiers {
-        if self.contains(modifier) {
-            return self.subtracting(modifier)
-        } else {
-            return self.union(modifier)
-        }
+        self.symmetricDifference(modifier)
     }
 }
 
